@@ -1,6 +1,5 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from "@angular/core";
 import { ImageCroppedEvent } from "ngx-image-cropper";
-import 'HammerJS'
 
 @Component({
     selector: "app-paint-app",

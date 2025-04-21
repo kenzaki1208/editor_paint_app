@@ -1,0 +1,64 @@
+<div class="container">
+    <div class="toolbar">
+        <button (click)="openFileInput()" title="Mở ảnh">
+            <span class="material-icons">folder_open</span>
+        </button>
+        <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" style="display: none;">
+        
+        <button (click)="cropImage()" title="Cắt ảnh">
+            <span class="material-icons">crop</span>
+        </button>
+        
+        <button (click)="rotateImage(90)" title="Xoay 90°">
+            <span class="material-icons">rotate_right</span>
+        </button>
+
+        <button (click)="rotateImage(-90)" title="Xoay -90°">
+            <span class="material-icons">rotate_left</span>
+        </button>
+        
+        <button (click)="saveImage()" title="Lưu ảnh">
+            <span class="material-icons">save</span>
+        </button>
+    </div>
+  
+    <div class="main-area">
+        <div class="info-bar" *ngIf="imageWidth && imageHeight">
+            w: {{imageWidth}}, h: {{imageHeight}}
+        </div>
+        
+        <div class="cropper-info" *ngIf="cropperPosition && showCropper">
+            Vùng cắt: left = {{cropperPosition.x1}}, top = {{cropperPosition.y1}}, 
+                right = {{cropperPosition.x2}}, bottom = {{cropperPosition.y2}}
+        </div>
+
+        <canvas #canvas class="canvas"></canvas>
+    
+        <div *ngIf="showCropper" class="cropper-container">
+            <div class="cropper-options">
+                <label>Tỷ lệ khung hình:</label>
+                <select [(ngModel)]="selectedAspectRatio" (change)="updateAspectRatio()">
+                    <option value="free">Tự do</option>
+                    <option value="4/3">4:3</option>
+                    <option value="16/9">16:9</option>
+                </select>
+                <label>
+                    <input type="checkbox" [(ngModel)]="maintainAspectRatio" (change)="updateAspectRatio()">
+                    Giữ tỷ lệ
+                </label>
+            </div>
+            <image-cropper
+                [imageChangedEvent]="imageChangedEvent"
+                [maintainAspectRatio]="false"
+                (cropperPositionChange)="cropperChange($event)"
+                (imageCropped)="imageCropped($event)"
+                (imageLoaded)="imageLoaded()"
+                (cropperReady)="cropperReady()"
+                (loadImageFailed)="loadImageFailed()"
+                *ngIf="showCropper">  
+            </image-cropper>
+            <button (click)="applyCrop()">Áp dụng</button>
+            <button (click)="cancelCrop()">Hủy</button>
+        </div>
+    </div>
+</div>

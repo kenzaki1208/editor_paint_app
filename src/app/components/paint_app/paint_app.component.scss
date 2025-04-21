@@ -1,0 +1,97 @@
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+    display: none;
+}
+
+.container {
+    display: flex;
+    height: 100%;
+    width: 70%;
+    -ms-overflow-style: none;
+    scrollbar-width: none; 
+}
+
+.container::-webkit-scrollbar {
+    display: none;
+}
+
+
+.toolbar {
+    width: 50px;
+    background-color: #f0f0f0;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    border: 1px solid #ccc;
+    height: 100%;
+}
+
+.toolbar button {
+    margin: 5px 0;
+    padding: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.toolbar button:hover {
+    background-color: #ddd;
+}
+
+.main-area {
+    flex: 1;
+    padding: 10px;
+    position: relative;
+}
+
+.info-bar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+
+.cropper-info {
+    position: absolute;
+    top: 40px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+
+.canvas {
+    width: 100%;
+    height: 100%;
+    border: 1px solid #ccc;
+}
+
+.cropper-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 10px;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.cropper-container button {
+    margin: 5px;
+    padding: 5px 10px
+}
+
+.cropper-options {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cropper-options label {
+    margin-right: 5px;
+}

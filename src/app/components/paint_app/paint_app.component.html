@@ -13,10 +13,11 @@
 
     <div class="container">
         <div class="toolbar">
-            <button class="toolbar-btn" (click)="openFileInput()" title="Mở ảnh">
+            <button class="toolbar-btn" aria-label="Mở ảnh" (click)="openFileInput()" title="Mở ảnh">
                 <span class="material-icons">folder_open</span>
                 <span class="btn-label">Open</span>
             </button>
+
             <input #fileInput type="file" accept="image/*" (change)="onFileSelected($event)" style="display: none;">
             
             <button class="toolbar-btn" (click)="cropImage()" title="Cắt ảnh" [disabled]="!hasImage">
@@ -49,12 +50,12 @@
                 <span class="btn-label">Hue</span>
             </button>
 
-            <button class="toolbar-btn" (click)="resetFilters()" title="Reset Filters">
+            <button class="toolbar-btn" (click)="resetFilters()" title="Reset Filters" [disabled]="!hasImage">
                 <span class="material-icons">restart_alt</span>
                 <span class="btn-label">Reset</span>
             </button>
             
-            <button class="toolbar-btn" (click)="saveImage()" title="Lưu ảnh" [disabled]="!hasImage">
+            <button class="toolbar-btn" (click)="openSaveModal()" title="Lưu ảnh" [disabled]="!hasImage">
                 <span class="material-icons">save</span>
                 <span class="btn-label">Save</span>
             </button>
@@ -63,19 +64,65 @@
                 <span class="material-icons">delete</span>
                 <span class="btn-label">Clear</span>
             </button>
+
+            <button class="toolbar-btn" (click)="openTextModal()" title="Văn bản" [ngClass]="{'active': isTextMode}" [disabled]="!hasImage">
+                <span class="material-icons">text_fields</span>
+                <span class="btn-label">Text</span>
+            </button>
+
+            <button class="toolbar-btn" (click)="openPresetFilterModal()" [disabled]="!hasImage">
+                <span class="material-icons">filter_vintage</span>
+                <span class="btn-label">Vintage</span>
+            </button>
         </div>
         
         <div class="main-area">
-            <div class="info-bar" *ngIf="imageWidth && imageHeight">
-                w: {{imageWidth}}, h: {{imageHeight}}
+            <div class="info-panel" *ngIf="imageWidth && imageHeight">
+                <div class="info-bar">
+                    w: {{imageWidth}}, h: {{imageHeight}}
+                </div>
+                <div class="cropper-info" *ngIf="cropperPosition">
+                    Tọa độ: topLeftX: {{cropperPosition.x1}}, topRightY: {{cropperPosition.y1}}, <br />
+                    bottomLeftX: {{cropperPosition.x2}}, bottomRightY: {{cropperPosition.y2}}
+                </div>
             </div>
 
-            <div class="cropper-info" *ngIf="cropperPosition">
-                Tọa độ: topLeftX: {{cropperPosition.x1}}, topRightY: {{cropperPosition.y1}}, 
-                bottomLefttX: {{cropperPosition.x2}}, bottomRightX: {{cropperPosition.y2}}
-            </div>
+            <div class="canvas-container" style="position: relative;">
+                <canvas #canvas (mousedown)="startDrawing($event)" (mousemove)="draw($event)" (mouseup)="stopDrawing($event)"></canvas>
 
-            <canvas #canvas class="canvas"></canvas>
+                <div *ngIf="showMarker" class="marker" [style.left.px]="markerPosition.x" [style.top.px]="markerPosition.y"></div>
+
+                <div *ngIf="showTextFrame" class="text-frame-container">
+                    <div class="text-frame" [style.left.px]="textFramePosition.x" [style.top.px]="textFramePosition.y" [style.width.px]="textFramePosition.width" [style.height.px]="textFramePosition.height">
+                        <textarea class="text-frame-input" [(ngModel)]="textContent" placeholder="Nhập văn bản"></textarea>
+                    </div>
+                
+                    <div class="text-modal" [style.left.px]="textModalPosition.x" [style.top.px]="textModalPosition.y">
+                        <h4>Tùy Chỉnh Văn Bản</h4>
+                        <div class="text-item">
+                            <label>Font chữ:</label>
+                            <select [(ngModel)]="textFont">
+                                <option value="Arial">Arial</option>
+                                <option value="Times New Roman">Times New Roman</option>
+                                <option value="Courier New">Courier New</option>
+                                <option value="Verdana">Verdana</option>
+                            </select>
+                        </div>
+                        <div class="text-item">
+                            <label>Kích thước: {{ textSize }}</label>
+                            <input type="range" min="10" max="100" step="1" [(ngModel)]="textSize">
+                        </div>
+                        <div class="text-item">
+                            <label>Màu chữ:</label>
+                            <input type="color" [(ngModel)]="textColor">
+                        </div>
+                        <div class="modal-actions">
+                            <button class="action-btn apply-btn" (click)="applyText()">Áp dụng</button>
+                            <button class="action-btn cancel-btn" (click)="cancelText()">Hủy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         
             <div *ngIf="showCropper" class="cropper-container">
                 <div class="cropper-options">
@@ -107,8 +154,8 @@
                 </div>
             </div>
 
-            <div *ngIf="showAdjustModal" class="adjust-modal">
-                <h4>{{ adjustModalTitle }}</h4>
+            <div *ngIf="showAdjustModal" class="adjust-modal" role="dialog" aria-labelledby="adjustModalTitle">
+                <h4 id="adjustModalTitle">{{ adjustModalTitle }}</h4>
                 <div class="adjust-item">
                     <label>{{ adjustModalLabel }}: {{ adjustModalValue }}</label>
                     <input type="range" [min]="adjustModalMin" [max]="adjustModalMax" [(ngModel)]="adjustModalValue" (input)="updateAdjustValue()">
@@ -137,8 +184,64 @@
                 </div>
             </div>
 
+            <div *ngIf="showSaveModal" class="save-modal" role="dialog" aria-labelledby="saveModalTitle">
+                <h4 id="saveModalTitle">Lưu Ảnh</h4>
+                <div class="save-item">
+                    <label>Định dạng:</label>
+                    <select [(ngModel)]="saveFormat">
+                        <option value="png">PNG</option>
+                        <option value="jpg">JPG</option>
+                    </select>
+                </div>
+                <div class="save-item">
+                    <label>Chất lượng: {{ saveQuality }}</label>
+                    <input type="range" min="0.1" max="1" step="0.1" [(ngModel)]="saveQuality">
+                </div>
+                <div class="modal-actions">
+                    <button class="action-btn apply-btn" (click)="applySave()">Áp dụng</button>
+                    <button class="action-btn cancel-btn" (click)="cancelSave()">Hủy</button>
+                </div>
+            </div>
+
+            <div *ngIf="showBrushModal" class="brush-modal" role="dialog" aria-labelledby="brushModalTitle">
+                <h4 id="brushModalTitle">Cọ Vẽ</h4>
+                <div class="brush-item">
+                    <label>Màu cọ:</label>
+                    <input type="color" [(ngModel)]="brushColor">
+                </div>
+                <div class="brush-item">
+                    <label>Kích thước cọ: {{ brushSize }}</label>
+                    <input type="range" min="1" max="20" step="1" [(ngModel)]="brushSize">
+                </div>
+                <div class="modal-actions">
+                    <button class="action-btn apply-btn" (click)="applyBrush()">Áp dụng</button>
+                    <button class="action-btn cancel-btn" (click)="cancelBrush()">Hủy</button>
+                </div>
+            </div>
+
+            <div *ngIf="showPresetFilterModal" class="preset-filter-modal">
+                <h4>Tùy Chỉnh Bộ Lọc</h4>
+                <div class="filter-item">
+                    <label>Chọn kiểu bộ lọc:</label>
+                    <select [(ngModel)]="selectedPresetFilter">
+                        <option value="vintage">Vintage</option>
+                        <option value="black-and-white">Đen Trắng</option>
+                        <option value="sepia">Sepia</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button class="action-btn apply-btn" (click)="applyPresetFilterModal()">Áp dụng</button>
+                    <button class="action-btn cancel-btn" (click)="cancelPresetFilterModal()">Hủy</button>
+                </div>
+            </div>
+
             <div class="loading-overlay" *ngIf="isLoading">
                 Đang tải ảnh...
+            </div>
+
+            <div *ngIf="showToast" class="toast-notification" [ngClass]="{'show': showToast, 'success': toastType === 'success', 'error': toastType === 'error', 'warning': toastType === 'warning'}">
+                {{ toastMessage }}
+                <button class="close-toast" (click)="closeToast()">×</button>
             </div>
         </div>
     </div>

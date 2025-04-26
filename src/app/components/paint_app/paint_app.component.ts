@@ -1,5 +1,6 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef, HostListener, ChangeDetectionStrategy } from "@angular/core";
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, HostListener, ChangeDetectionStrategy, Renderer2 } from "@angular/core";
 import { ImageCroppedEvent } from "ngx-image-cropper";
+import interact from 'interactjs';
 
 @Component({
     selector: "app-paint-app",
@@ -47,8 +48,51 @@ export class PaintAppComponent {
     private tempRotation: number = 0; 
     private originalRotation: number = 0;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    private isDrawing = false;
+    brushSize = 5;
+    brushColor = '#000000';
+    showBrushModal: boolean = false;
+    isDrawingMode: boolean = false;
 
+    showSaveModal: boolean = false;
+    saveFormat: string = 'png'; 
+    saveQuality: number = 1;
+
+    showTextModal: boolean = false;
+    textContent: string = '';
+    textFont: string = 'Arial';
+    textSize: number = 20;
+    textColor: string = '#000000';
+    isTextMode: boolean = false;
+    showTextFrame: boolean = false;
+    textFramePosition: { x: number, y: number, width: number, height: number } = { x: 0, y: 0, width: 200, height: 100 };
+    textModalPosition: { x: number, y: number } = { x: 0, y: 0 };
+
+    private texts: Array<{
+        content: string;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        font: string;
+        size: number;
+        color: string;
+    }> = [];
+
+    public markerPosition: { x: number, y: number } = { x: 0, y: 0 }; 
+    public showMarker: boolean = false; 
+
+    showPresetFilterModal: boolean = false;
+    selectedPresetFilter: string = 'vintage'; 
+
+    showToast: boolean = false; 
+    toastMessage: string = '';
+    toastType: string = 'success'; 
+    private toastTimeout: any = null;
+
+    constructor(private cdr: ChangeDetectorRef, private renderer: Renderer2) {}
+
+    // Initialization and Setup
     ngOnInit() {
         this.loadInitialState();
     }
@@ -58,6 +102,30 @@ export class PaintAppComponent {
         this.adjustCanvasSize();
     }
 
+    loadInitialState() {
+        this.isDarkMode = localStorage.getItem('darkMode') === 'true';
+        this.toggleDarkModeClass();
+    }
+
+    // Dark Mode
+    toggleDarkMode() {
+        this.isDarkMode = !this.isDarkMode;
+        localStorage.setItem('darkMode', this.isDarkMode.toString());
+        this.toggleDarkModeClass();
+    }
+
+    toggleDarkModeClass() {
+        const appContainer = document.querySelector('.app-container');
+        if (appContainer) {
+            if (this.isDarkMode) {
+                appContainer.classList.add('dark-mode');
+            } else {
+                appContainer.classList.remove('dark-mode');
+            }
+        }
+    }
+
+    // Canvas Size Adjustment
     adjustCanvasSize() {
         if (this.showCropper) return;
         const canvas = this.canvas.nativeElement;
@@ -86,28 +154,7 @@ export class PaintAppComponent {
         this.adjustCanvasSize();
     }
 
-    loadInitialState() {
-        this.isDarkMode = localStorage.getItem('darkMode') === 'true';
-        this.toggleDarkModeClass();
-    }
-
-    toggleDarkMode() {
-        this.isDarkMode = !this.isDarkMode;
-        localStorage.setItem('darkMode', this.isDarkMode.toString());
-        this.toggleDarkModeClass();
-    }
-
-    toggleDarkModeClass() {
-        const appContainer = document.querySelector('.app-container');
-        if (appContainer) {
-            if (this.isDarkMode) {
-                appContainer.classList.add('dark-mode');
-            } else {
-                appContainer.classList.remove('dark-mode');
-            }
-        }
-    }
-
+    // History Management
     saveState() {
         const canvasData = this.canvas.nativeElement.toDataURL();
         this.history = this.history.slice(0, this.historyIndex + 1);
@@ -149,6 +196,27 @@ export class PaintAppComponent {
         return this.historyIndex < this.history.length - 1;
     }
 
+    // Keyboard Events
+    @HostListener('document:keydown', ['$event'])
+    handleKeyboardEvent(event: KeyboardEvent) {
+        if (event.ctrlKey && event.key === 'z') {
+            this.undo();
+        }
+        if (event.ctrlKey && event.key === 's') {
+            event.preventDefault();
+            this.saveImage();
+        }
+    }
+
+    @HostListener('keydown.enter', ['$event'])
+    onEnterKey(event: KeyboardEvent) {
+        const target = event.target as HTMLElement;
+        if (target.classList.contains('toolbar-btn')) {
+            target.click();
+        }
+    }
+
+    // Open Image (File Input)
     openFileInput() {
         this.fileInput.nativeElement.click();
     }
@@ -158,7 +226,7 @@ export class PaintAppComponent {
         if (input.files && input.files[0]) {
             const file = input.files[0];
             if (!file.type.startsWith('image/')) {
-                alert('Vui lòng chọn một file ảnh hợp lệ (jpg, png, etc.)');
+                this.showToastNotification('Vui lòng chọn một file ảnh hợp lệ (jpg, png, etc.)');
                 input.value = '';
                 return;
             }
@@ -183,7 +251,7 @@ export class PaintAppComponent {
             reader.onerror = () => {
                 this.isLoading = false;
                 this.hasImage = false;
-                alert('Không thể đọc file ảnh. Vui lòng thử lại.');
+                this.showToastNotification('Không thể đọc file ảnh. Vui lòng thử lại.');
                 this.cdr.detectChanges();
             };
             reader.readAsDataURL(input.files[0]);
@@ -191,15 +259,32 @@ export class PaintAppComponent {
         }
     }
 
+    imageLoaded() {
+        this.isLoading = false;
+    }
+
+    loadImageFailed() {
+        this.isLoading = false;
+        this.showToastNotification('Tải ảnh thất bại. Vui lòng thử lại với một file ảnh hợp lệ.');
+    }
+
+    // Crop Image
     cropImage() {
         if (this.image.src) {
             if (this.imageWidth! > 4096 || this.imageHeight! > 4096) {
-                alert('Ảnh quá lớn (vượt quá 4096x4096 pixel). Vui lòng chọn ảnh nhỏ hơn.');
+                this.showToastNotification('Ảnh quá lớn (vượt quá 4096x4096 pixel). Vui lòng chọn ảnh nhỏ hơn.');
                 return;
             }
             this.showCropper = true;
+            setTimeout(() => {
+                const cropperContainer = document.querySelector('.cropper-container');
+                if (cropperContainer) {
+                    this.renderer.addClass(cropperContainer, 'show');
+                }
+            }, 0);
+            this.cdr.detectChanges();
         } else {
-            alert('Vui lòng chọn một ảnh trước khi cắt.');
+            this.showToastNotification('Vui lòng chọn một ảnh trước khi cắt.');
         }
     }
 
@@ -241,33 +326,98 @@ export class PaintAppComponent {
             this.cropperPosition = null;
             this.hasImage = true;
             this.saveState();
-            alert('Đã áp dụng cắt ảnh thành công!');
+            this.showToastNotification('Đã áp dụng cắt ảnh thành công!');
             this.cdr.detectChanges();
         };
+        const cropperContainer = document.querySelector('.cropper-container');
+        if (cropperContainer) {
+            this.renderer.removeClass(cropperContainer, 'show');
+        }
         this.showCropper = false;
         this.cropperPosition = null;
     }
 
     cancelCrop() {
+        const cropperContainer = document.querySelector('.cropper-container');
+        if (cropperContainer) {
+            this.renderer.removeClass(cropperContainer, 'show');
+        }
         this.showCropper = false;
         this.cropperPosition = null;
     }
 
+    updateAspectRatio() {
+        if (this.selectedAspectRatio === 'free') {
+            this.maintainAspectRatio = false;
+        } else {
+            this.maintainAspectRatio = false;
+            switch (this.selectedAspectRatio) {
+                case '4/3':
+                    this.aspectRatio = 4 / 3;
+                    break;
+                case '16/9':
+                    this.aspectRatio = 16 / 9;
+                    break;
+                default:
+                    this.aspectRatio = 4 / 3;
+            }
+        }
+    }
+
+    cropperReady() {
+        this.isLoading = false;
+    }
+
+    // Rotate Image
     openRotateModal() {
         this.showRotateModal = true;
         this.tempRotation = this.currentRotation;
         this.originalRotation = this.currentRotation;
+        setTimeout(() => {
+            const rotateModal = document.querySelector('.rotate-modal');
+            if (rotateModal) {
+                this.renderer.addClass(rotateModal, 'show');
+            }
+        }, 0);
         this.cdr.detectChanges();
+    }
+
+    rotateImage(degrees: number) {
+        if (!this.image.src) return;
+
+        const canvas = this.canvas.nativeElement;
+        const ctx = this.ctx;
+        this.currentRotation = degrees * Math.PI / 180; 
+
+        const absRotation = Math.abs(this.currentRotation % (2 * Math.PI));
+        const sin = Math.abs(Math.sin(this.currentRotation));
+        const cos = Math.abs(Math.cos(this.currentRotation));
+        
+        const newWidth = Math.round(this.image.width * cos + this.image.height * sin);
+        const newHeight = Math.round(this.image.width * sin + this.image.height * cos);
+    
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+    
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(this.currentRotation);
+        ctx.drawImage(this.image, -this.image.width / 2, -this.image.height / 2);
+        ctx.restore();
+    
+        this.imageWidth = newWidth;
+        this.imageHeight = newHeight;
     }
 
     previewRotate(degrees: number) {
         if (!this.image.src) {
-            alert('Vui lòng chọn một ảnh trước khi xoay.');
+            this.showToastNotification('Vui lòng chọn một ảnh trước khi xoay.');
             return;
         }
     
         if (this.imageWidth! > 4096 || this.imageHeight! > 4096) {
-            alert('Ảnh quá lớn (vượt quá 4096x4096 pixel). Vui lòng chọn ảnh nhỏ hơn.');
+            this.showToastNotification('Ảnh quá lớn (vượt quá 4096x4096 pixel). Vui lòng chọn ảnh nhỏ hơn.');
             return;
         }
     
@@ -303,6 +453,10 @@ export class PaintAppComponent {
     applyRotate() {
         this.currentRotation = this.tempRotation; 
         this.saveState();
+        const rotateModal = document.querySelector('.rotate-modal');
+        if (rotateModal) {
+            this.renderer.removeClass(rotateModal, 'show');
+        }
         this.showRotateModal = false;
         this.cdr.detectChanges();
     }
@@ -310,87 +464,59 @@ export class PaintAppComponent {
     cancelRotate() {
         this.currentRotation = this.originalRotation; 
         this.rotateImage(0); 
+        const rotateModal = document.querySelector('.rotate-modal');
+        if (rotateModal) {
+            this.renderer.removeClass(rotateModal, 'show');
+        }
         this.showRotateModal = false;
         this.cdr.detectChanges();
     }
 
-    rotateImage(degrees: number) {
-        if (!this.image.src) return;
-
-        const canvas = this.canvas.nativeElement;
-        const ctx = this.ctx;
-        this.currentRotation = degrees * Math.PI / 180; 
-
-        const absRotation = Math.abs(this.currentRotation % (2 * Math.PI));
-        const sin = Math.abs(Math.sin(this.currentRotation));
-        const cos = Math.abs(Math.cos(this.currentRotation));
-        
-        const newWidth = Math.round(this.image.width * cos + this.image.height * sin);
-        const newHeight = Math.round(this.image.width * sin + this.image.height * cos);
-    
-        canvas.width = newWidth;
-        canvas.height = newHeight;
-    
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(this.currentRotation);
-        ctx.drawImage(this.image, -this.image.width / 2, -this.image.height / 2);
-        ctx.restore();
-    
-        this.imageWidth = newWidth;
-        this.imageHeight = newHeight;
-    }
-
-    saveImage() {
-        const link = document.createElement('a');
-        link.download = 'edited-image.png';
-        link.href = this.canvas.nativeElement.toDataURL();
-        link.click();
-        alert('Đã lưu ảnh thành công!');
-    }
-
-    updateAspectRatio() {
-        if (this.selectedAspectRatio === 'free') {
-            this.maintainAspectRatio = false;
-        } else {
-            this.maintainAspectRatio = false;
-            switch (this.selectedAspectRatio) {
-                case '4/3':
-                    this.aspectRatio = 4 / 3;
-                    break;
-                case '16/9':
-                    this.aspectRatio = 16 / 9;
-                    break;
-                default:
-                    this.aspectRatio = 4 / 3;
+    // Save Image
+    openSaveModal() {
+        this.showSaveModal = true;
+        this.saveFormat = 'png'; 
+        this.saveQuality = 1;
+        setTimeout(() => {
+            const saveModal = document.querySelector('.save-modal');
+            if (saveModal) {
+                this.renderer.addClass(saveModal, 'show');
             }
+        }, 0);
+        this.cdr.detectChanges();
+    }
+
+    saveImage(format: string = 'png', quality: number = 1) {
+        const mimeType = `image/${format}`;
+        const link = document.createElement('a');
+        link.download = `edited-image.${format}`;
+        link.href = this.canvas.nativeElement.toDataURL(mimeType, quality);
+        link.click();
+        this.showToastNotification('Đã lưu ảnh thành công!');
+    }
+
+    applySave() {
+        this.saveImage(this.saveFormat, this.saveQuality);
+        const saveModal = document.querySelector('.save-modal');
+        if (saveModal) {
+            this.renderer.removeClass(saveModal, 'show');
         }
+        this.showSaveModal = false;
+        this.cdr.detectChanges();
     }
 
-    imageLoaded() {
-        this.isLoading = false;
-    }
-    cropperReady() {
-        this.isLoading = false;
-    }
-    loadImageFailed() {
-        this.isLoading = false;
-        alert('Tải ảnh thất bại. Vui lòng thử lại với một file ảnh hợp lệ.');
+    cancelSave() {
+        const saveModal = document.querySelector('.save-modal');
+        if (saveModal) {
+            this.renderer.removeClass(saveModal, 'show');
+        }
+        this.showSaveModal = false;
+        this.cdr.detectChanges();
     }
 
+    // Filters
     applyFilters() {
-        if (!this.image.src) return;
-
-        this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-        this.ctx.filter = `
-            brightness(${this.brightness}%)
-            contrast(${this.contrast}%)
-            saturate(${this.saturation}%)
-            hue-rotate(${this.hue}deg)
-        `;
-        this.ctx.drawImage(this.image, 0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-        this.ctx.filter = 'none';
+        this.redrawCanvas();
     }
 
     adjustBrightness(step: number) {
@@ -433,38 +559,67 @@ export class PaintAppComponent {
         this.saturation = 100;
         this.hue = 0;
         this.sharpness = 0;
+        this.texts = [];
         this.applyFilters();
         this.saveState();
         this.cdr.detectChanges();
     }
 
-    clearCanvas() {
-        this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-        
-        this.image.src = '';
-        this.imageWidth = null;
-        this.imageHeight = null;
-        this.hasImage = false;
-        this.currentRotation = 0;
-        this.cropperPosition = null;
-        this.showCropper = false;
-        this.croppedImage = '';
-        this.imageChangedEvent = '';
-        
-        this.brightness = 100;
-        this.contrast = 100;
-        this.saturation = 100;
-        this.hue = 0;
-        this.sharpness = 0;
-        
-        this.history = [];
-        this.historyIndex = -1;
-        
-        this.adjustCanvasSize();
-        
+    applyPresetFilter(preset: string) {
+        switch (preset) {
+            case 'vintage':
+                this.brightness = 90;
+                this.contrast = 120;
+                this.saturation = 80;
+                this.hue = 20;
+                break;
+            case 'black-and-white':
+                this.saturation = 0;
+                break;
+            case 'sepia':
+                this.brightness = 100;
+                this.contrast = 90;
+                this.saturation = 50;
+                this.hue = 30;
+                break;
+        }
+        this.applyFilters();
+        this.saveState();
         this.cdr.detectChanges();
     }
 
+    openPresetFilterModal() {
+        this.showPresetFilterModal = true;
+        this.selectedPresetFilter = 'vintage'; 
+        setTimeout(() => {
+            const presetFilterModal = document.querySelector('.preset-filter-modal');
+            if (presetFilterModal) {
+                this.renderer.addClass(presetFilterModal, 'show');
+            }
+        }, 0);
+        this.cdr.detectChanges();
+    }
+
+    applyPresetFilterModal() {
+        this.applyPresetFilter(this.selectedPresetFilter); 
+        const presetFilterModal = document.querySelector('.preset-filter-modal');
+        if (presetFilterModal) {
+            this.renderer.removeClass(presetFilterModal, 'show');
+        }
+        this.showPresetFilterModal = false;
+        this.cdr.detectChanges();
+    }
+
+    cancelPresetFilterModal() {
+        const presetFilterModal = document.querySelector('.preset-filter-modal');
+        if (presetFilterModal) {
+            this.renderer.removeClass(presetFilterModal, 'show');
+        }
+        this.showPresetFilterModal = false;
+        this.cdr.detectChanges();
+    }
+
+    // Adjust Modal
     openAdjustModal(type: string) {
         this.showAdjustModal = true;
         this.adjustModalType = type;
@@ -503,6 +658,12 @@ export class PaintAppComponent {
                 this.originalValue = this.hue;
                 break;
         }
+        setTimeout(() => {
+            const adjustModal = document.querySelector('.adjust-modal');
+            if (adjustModal) {
+                this.renderer.addClass(adjustModal, 'show');
+            }
+        }, 0);
         this.cdr.detectChanges();
     }
 
@@ -527,6 +688,10 @@ export class PaintAppComponent {
 
     applyAdjust() {
         this.saveState();
+        const adjustModal = document.querySelector('.adjust-modal');
+        if (adjustModal) {
+            this.renderer.removeClass(adjustModal, 'show');
+        }
         this.showAdjustModal = false;
         this.cdr.detectChanges();
     }
@@ -547,7 +712,425 @@ export class PaintAppComponent {
                 break;
         }
         this.applyFilters();
+        const adjustModal = document.querySelector('.adjust-modal');
+        if (adjustModal) {
+            this.renderer.removeClass(adjustModal, 'show');
+        }
         this.showAdjustModal = false;
+        this.cdr.detectChanges();
+    }
+
+    // Brush (Drawing)
+    openBrushModal() {
+        this.showBrushModal = true;
+        setTimeout(() => {
+            const brushModal = document.querySelector('.brush-modal');
+            if (brushModal) {
+                this.renderer.addClass(brushModal, 'show');
+            }
+        }, 0);
+        this.cdr.detectChanges();
+    }
+
+    applyBrush() {
+        this.isDrawingMode = true;
+        this.isTextMode = false;
+        this.redrawCanvas();
+        const brushModal = document.querySelector('.brush-modal');
+        if (brushModal) {
+            this.renderer.removeClass(brushModal, 'show');
+        }
+        this.showBrushModal = false;
+        this.showToastNotification('Cọ vẽ đã được thiết lập. Bạn có thể vẽ trên ảnh!');
+        this.cdr.detectChanges();
+    }
+
+    cancelBrush() {
+        const brushModal = document.querySelector('.brush-modal');
+        if (brushModal) {
+            this.renderer.removeClass(brushModal, 'show');
+        }
+        this.showBrushModal = false;
+        this.cdr.detectChanges();
+    }
+
+    startDrawing(event: MouseEvent) {
+        if (!this.hasImage) {
+            this.showToastNotification('Vui lòng tải ảnh trước khi vẽ.');
+            return;
+        }
+        if (this.isDrawingMode) {
+            this.isDrawing = true;
+            this.ctx.beginPath();
+            this.ctx.lineWidth = this.brushSize;
+            this.ctx.strokeStyle = this.brushColor;
+            const rect = this.canvas.nativeElement.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            this.ctx.moveTo(x, y);
+        }
+    }
+    
+    draw(event: MouseEvent) {
+        if (this.isDrawingMode && this.isDrawing) {
+            const rect = this.canvas.nativeElement.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            this.ctx.lineTo(x, y);
+            this.ctx.stroke();
+        }
+    }
+    
+    stopDrawing(event: MouseEvent) {
+        if (this.isDrawingMode && this.isDrawing) {
+            this.isDrawing = false;
+            this.saveState();
+        }
+    }
+
+    redrawCanvas() {
+        this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
+        if (this.image.src) {
+            this.ctx.filter = `
+                brightness(${this.brightness}%)
+                contrast(${this.contrast}%)
+                saturate(${this.saturation}%)
+                hue-rotate(${this.hue}deg)
+            `;
+            this.ctx.drawImage(this.image, 0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
+            this.ctx.filter = 'none';
+        }
+
+        this.texts.forEach(text => {
+            this.ctx.save();
+            this.ctx.font = `${text.size}px ${text.font}`;
+            this.ctx.fillStyle = text.color;
+            this.ctx.textBaseline = 'top';
+
+            const words = text.content.split(' ');
+            let line = '';
+            const lineHeight = text.size * 1.2;
+            let currentY = text.y;
+
+            for (let i = 0; i < words.length; i++) {
+                const testLine = line + words[i] + ' ';
+                const metrics = this.ctx.measureText(testLine);
+                const testWidth = metrics.width;
+
+                if (testWidth > text.width && i > 0) {
+                    this.ctx.fillText(line, text.x, currentY);
+                    line = words[i] + ' ';
+                    currentY += lineHeight;
+                } else {
+                    line = testLine;
+                }
+
+                if (currentY + lineHeight > text.y + text.height) break;
+            }
+
+            this.ctx.fillText(line, text.x, currentY);
+            this.ctx.restore();
+        });
+    }
+
+    public previewText() {
+        this.redrawCanvas();
+    
+        if (!this.showTextFrame || !this.textContent.trim()) return;
+    
+        const canvasWidth = this.canvas.nativeElement.width;
+        const canvasHeight = this.canvas.nativeElement.height;
+        const imageWidth = this.imageWidth || canvasWidth;
+        const imageHeight = this.imageHeight || canvasHeight;
+    
+        const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
+    
+        const x = this.textFramePosition.x * scale;
+        const y = this.textFramePosition.y * scale;
+        const width = this.textFramePosition.width * scale;
+        const height = this.textFramePosition.height * scale;
+        const adjustedTextSize = this.textSize * scale;
+    
+        this.ctx.save();
+        this.ctx.font = `${adjustedTextSize}px ${this.textFont}`;
+        this.ctx.fillStyle = this.textColor;
+        this.ctx.textBaseline = 'top';
+    
+        const words = this.textContent.split(' ');
+        let line = '';
+        const lineHeight = adjustedTextSize * 1.2;
+        let currentY = y;
+    
+        for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            const metrics = this.ctx.measureText(testLine);
+            const testWidth = metrics.width;
+    
+            if (testWidth > width && i > 0) {
+                this.ctx.fillText(line, x, currentY);
+                line = words[i] + ' ';
+                currentY += lineHeight;
+            } else {
+                line = testLine;
+            }
+    
+            if (currentY + lineHeight > y + height) break;
+        }
+    
+        this.ctx.fillText(line, x, currentY);
+        this.ctx.restore();
+    }
+
+    openTextModal() {
+        if (!this.hasImage) {
+            this.showToastNotification('Vui lòng tải ảnh trước khi thêm văn bản.');
+            return;
+        }
+        this.isTextMode = true;
+        this.isDrawingMode = false;
+        this.textContent = '';
+        this.textFont = 'Arial';
+        this.textSize = 20;
+        this.textColor = '#000000';
+        this.showTextFrame = true;
+        this.showTextModal = true;
+        this.showMarker = true;
+
+        this.markerPosition = { x: 0, y: 0 };
+
+        const frameWidth = 200;
+        const frameHeight = 100;
+        this.textFramePosition = {
+            x: this.markerPosition.x + 10,
+            y: this.markerPosition.y + 10,
+            width: frameWidth,
+            height: frameHeight
+        };
+
+        this.updateTextModalPosition();
+
+        setTimeout(() => {
+            const marker = document.querySelector('.marker');
+            if (marker) {
+                interact('.marker')
+                    .draggable({
+                        onmove: (event) => {
+                            this.markerPosition.x += event.dx;
+                            this.markerPosition.y += event.dy;
+                            this.textFramePosition.x = this.markerPosition.x + 10;
+                            this.textFramePosition.y = this.markerPosition.y + 10;
+                            this.updateTextModalPosition();
+                            this.cdr.detectChanges();
+                        },
+                        modifiers: [
+                            interact.modifiers.restrictRect({
+                                restriction: 'parent',
+                                endOnly: false
+                            })
+                        ]
+                    });
+            }
+
+            const textFrame = document.querySelector('.text-frame');
+            if (textFrame) {
+                this.renderer.addClass(textFrame, 'show');
+                interact('.text-frame')
+                    .draggable({
+                        onmove: (event) => {
+                            this.textFramePosition.x += event.dx;
+                            this.textFramePosition.y += event.dy;
+                            this.markerPosition.x = this.textFramePosition.x - 10;
+                            this.markerPosition.y = this.textFramePosition.y - 10;
+                            this.updateTextModalPosition();
+                            this.cdr.detectChanges();
+                        },
+                        modifiers: [
+                            interact.modifiers.restrictRect({
+                                restriction: 'parent',
+                                endOnly: false
+                            })
+                        ]
+                    })
+                    .resizable({
+                        edges: { left: true, right: true, bottom: true, top: true },
+                        onmove: (event) => {
+                            this.textFramePosition.width = event.rect.width;
+                            this.textFramePosition.height = event.rect.height;
+                            this.textFramePosition.x = event.rect.left;
+                            this.textFramePosition.y = event.rect.top;
+                            this.markerPosition.x = this.textFramePosition.x - 10;
+                            this.markerPosition.y = this.textFramePosition.y - 10;
+                            this.updateTextModalPosition();
+                            this.previewText();
+                            this.cdr.detectChanges();
+                        },
+                        modifiers: [
+                            interact.modifiers.restrictSize({
+                                min: { width: 50, height: 50 }
+                            }),
+                            interact.modifiers.restrictRect({
+                                restriction: 'parent'
+                            })
+                        ]
+                    });
+            }
+            const textModal = document.querySelector('.text-modal') as HTMLElement;
+            if (textModal) {
+                this.renderer.addClass(textModal, 'show');
+                this.renderer.setAttribute(textModal, 'tabindex', '0');
+                textModal.focus();
+            }
+        }, 0);
+        this.cdr.detectChanges();
+    }
+
+    updateTextModalPosition() {
+        const modalHeight = 200;
+        this.textModalPosition = {
+            x: this.textFramePosition.x + (this.textFramePosition.width / 2), 
+            y: this.textFramePosition.y + this.textFramePosition.height + 10 
+        };
+        const canvas = this.canvas.nativeElement;
+        const maxY = canvas.height - modalHeight;
+        if (this.textModalPosition.y > maxY) {
+            this.textModalPosition.y = maxY;
+        }
+        if (this.textModalPosition.y < 0) {
+            this.textModalPosition.y = 0;
+        }
+    }
+
+    applyText() {
+        if (!this.textContent.trim() || !this.textFramePosition) {
+            this.showToastNotification('Vui lòng nhập văn bản trước khi áp dụng.');
+            return;
+        }
+
+        this.adjustCanvasSize();
+
+        const canvasWidth = this.canvas.nativeElement.width;
+        const canvasHeight = this.canvas.nativeElement.height;
+        const imageWidth = this.imageWidth || canvasWidth;
+        const imageHeight = this.imageHeight || canvasHeight;
+
+        const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
+
+        const x = this.textFramePosition.x * scale;
+        const y = this.textFramePosition.y * scale;
+        const width = this.textFramePosition.width * scale;
+        const height = this.textFramePosition.height * scale;
+        const adjustedTextSize = this.textSize * scale;
+
+        console.log('Canvas size:', canvasWidth, canvasHeight);
+        console.log('Image size:', imageWidth, imageHeight);
+        console.log('Scale:', scale);
+        console.log('Text position:', { x, y, width, height, adjustedTextSize });
+        console.log('Text content:', this.textContent);
+
+        if (x < 0 || y < 0 || x > canvasWidth || y > canvasHeight) {
+            console.warn('Text position is outside canvas bounds:', { x, y });
+            return;
+        }
+
+        this.texts.push({
+            content: this.textContent,
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+            font: this.textFont,
+            size: adjustedTextSize,
+            color: this.textColor
+        });
+
+        this.redrawCanvas();
+
+        this.saveState();
+        this.closeTextFrame();
+    }
+
+    cancelText() {
+        this.closeTextFrame();
+    }
+
+    closeTextFrame() {
+        this.isTextMode = false;
+        this.showTextFrame = false;
+        this.showTextModal = false;
+        this.showMarker = false; 
+        this.textFramePosition = { x: 0, y: 0, width: 200, height: 100 };
+        this.textModalPosition = { x: 0, y: 0 };
+        this.markerPosition = { x: 0, y: 0 }; 
+        const textFrame = document.querySelector('.text-frame');
+        if (textFrame) {
+            this.renderer.removeClass(textFrame, 'show');
+        }
+        const textModal = document.querySelector('.text-modal');
+        if (textModal) {
+            this.renderer.removeClass(textModal, 'show');
+        }
+        this.cdr.detectChanges();
+    }
+
+    //showToastNotification
+    showToastNotification(message: string, type: string = 'success', duration: number = 3000) {
+        this.toastMessage = message;
+        this.toastType = type;
+        this.showToast = true;
+    
+        if (this.toastTimeout) {
+            clearTimeout(this.toastTimeout);
+        }
+    
+        this.toastTimeout = setTimeout(() => {
+            this.showToast = false;
+            this.toastMessage = '';
+            this.cdr.detectChanges();
+        }, duration);
+    
+        this.cdr.detectChanges();
+    }
+
+    closeToast() {
+        this.showToast = false;
+        this.toastMessage = '';
+        if (this.toastTimeout) {
+            clearTimeout(this.toastTimeout);
+        }
+        this.cdr.detectChanges();
+    }
+
+    // Clear Canvas
+    clearCanvas() {
+        // this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
+        
+        this.image.src = '';
+        this.imageWidth = null;
+        this.imageHeight = null;
+        this.hasImage = false;
+        this.currentRotation = 0;
+        this.cropperPosition = null;
+        this.showCropper = false;
+        this.croppedImage = '';
+        this.imageChangedEvent = '';
+        
+        this.brightness = 100;
+        this.contrast = 100;
+        this.saturation = 100;
+        this.hue = 0;
+        this.sharpness = 0;
+        
+        this.history = [];
+        this.historyIndex = -1;
+
+        this.texts = [];
+
+        if (this.fileInput) {
+            this.fileInput.nativeElement.value = ''; 
+        }
+        
+        this.adjustCanvasSize();
+        
         this.cdr.detectChanges();
     }
 }

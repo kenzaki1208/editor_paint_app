@@ -5,7 +5,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 .app-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
     width: 100%;
     transition: background-color 0.3s ease;
 
@@ -34,7 +34,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         //     background-color: rgba(255, 255, 255, 0.1);
         // }
 
-        .cropper-container, .save-modal, .text-modal, .text-frame-container {
+        .cropper-container, .save-modal, .text-modal, .text-frame-container, 
+        .rotate-modal, .adjust-modal, .save-modal, .brush-modal {
             background: #828282;
             border: 1px solid #a3a2a2;
         }
@@ -97,7 +98,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     background: linear-gradient(180deg, #3498db, #2980b9);
     display: flex;
     flex-direction: column;
-    padding: 15px;
+    // padding: 15px;
     border-right: 1px solid #ccc;
     overflow-y: auto;
     -ms-overflow-style: none; 
@@ -148,11 +149,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     // padding: 20px;
     position: relative;
     background-color: #f5f6fa;
-    display: flex; 
+    // display: flex; 
     justify-content: center;
     align-items: center;
     overflow: auto;
-    height: auto;
+    height: 100%;
+    width: 100%;
+}
+
+.main-area::-webkit-scrollbar{
+    display: none;
 }
 
 // .info-bar, .cropper-info {
@@ -176,8 +182,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 
 .info-panel {
     position: fixed;
-    top: 70px; 
-    left: 106px; 
+    // top: 61px; 
+    // left: 881px; 
     background-color: rgba(0, 0, 0, 0.7);
     color: white;
     padding: 10px;
@@ -195,25 +201,35 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .canvas {
-    height: 100%;
+    max-width: 100%; 
+    max-height: 100%;
+    width: auto;
+    height: auto;
     border: 1px solid #ccc;
     border-radius: 10px;
     background-color: #fff;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     position: relative; 
     z-index: 10;
+    object-fit: contain;
 }
 
 .canvas.responsive {
     max-width: 100%; 
     max-height: 100%; 
-    width: auto; 
+    width: auto;
     height: auto;
 }
 
 .canvas-container {
     position: relative;
-    display: inline-block; 
+    display: flex;
+    flex-direction: row; 
+    // justify-content: center;
+    // align-items: center;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
 }
 
 .marker {
@@ -228,33 +244,30 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .cropper-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    position: absolute; 
+    width: 100%;
+    height: 100%;
     background: #fff;
-    padding: 20px;
-    border: 1px solid #ccc;
-    border-radius: 15px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    z-index: 20;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 15;
     max-width: 100%;
     max-height: 100%;
     overflow: auto;
-
-    &.show {
-        opacity: 1;
-        transform: translate(-50%, -50%) scale(1);
-    }
+    min-height: 0;
 
     image-cropper {
-        display: block; 
+        display: block;
         width: 100%;
         height: auto;
+        max-width: none;
+        max-height: none;
+        object-fit: contain;
     }
 
     img {
-        display: block !important; 
+        display: block !important;
         max-width: 100%;
         max-height: 100%;
     }
@@ -278,6 +291,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     opacity: 0;
     transition: opacity 0.3s ease;
     z-index: 21;
+    width: 100%;
 
     &.show {
         opacity: 1;
@@ -286,14 +300,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 
 .text-modal {
     position: absolute;
-    transform: translateX(-50%); 
+    top: 100%; 
+    left: 0; 
+    margin-top: 10px;
     background: #fff;
     padding: 20px;
     border: 1px solid #ccc;
     border-radius: 15px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     z-index: 19;
-    width: min(90%, 400px);
+    width: 100%;
     pointer-events: auto;
 
     h4 {
@@ -323,17 +339,36 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .rotate-modal {
+    position: relative;
+    width: fit-content;
+    height: fit-content;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    //margin-top: 10px;
+
     .rotate-options {
         display: flex;
-        justify-content: space-around;
-        margin-bottom: 15px;
+        gap: 10px;
+        margin-top: 10px;
+        align-items: center;
+        flex-shrink: 0;
 
         .rotate-btn {
+            padding: 8px 15px;
+            background: none;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             gap: 5px;
-            background: linear-gradient(90deg, #3498db, #2980b9);
-            color: white;
+            transition: background-color 0.3s ease;
 
             &:hover {
                 background: linear-gradient(90deg, #2980b9, #1f6a93);
@@ -342,18 +377,19 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 }
 
-.adjust-modal, .rotate-modal, .save-modal, .brush-modal {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+.adjust-modal, .save-modal, .brush-modal {
+    position: relative;
+    width: fit-content;
+    height: fit-content;
     background: #fff;
-    padding: 20px;
-    border: 1px solid #ccc;
-    border-radius: 15px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    z-index: 20;
-    width: min(90%, 400px);
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    //margin-top: 10px;
 
     h4 {
         margin: 0 0 15px;
@@ -368,7 +404,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .adjust-item, .save-item, .brush-item, .text-item {
-    margin-bottom: 15px;
+    // margin-bottom: 15px;
+    margin-top: 5px;
 
     label {
         display: block;
@@ -397,6 +434,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     display: flex;
     align-items: center;
     gap: 15px;
+    justify-content: flex-end;
 
     label {
         font-size: 14px;
@@ -435,16 +473,18 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .preset-filter-modal {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    z-index: 1000;
-    display: none;
+    position: relative;
+    width: fit-content;
+    height: fit-content;
+    background: #fff;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    //margin-top: 10px;
     &.show {
         display: block;
     }
@@ -491,7 +531,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 15px;
+    margin-top: 10px;
+    flex-shrink: 0;
 }
 
 .action-btn {
@@ -584,4 +625,180 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     z-index: 15;
 }
 
+/* Di động (≤767px) */
+@media (max-width: 767px) {
+    .header {
+        flex-direction: row;
+        align-items: center;
+        padding: 8px 10px;
+    }
 
+    .app-title {
+        font-size: 16px;
+    }
+
+    .header-actions {
+        flex-direction: row;
+        gap: 6px;
+        width: 70%;
+        margin-top: 8px;
+    }
+
+    .header-btn {
+        width: 100%;
+        text-align: center;
+        padding: 6px;
+        font-size: 13px;
+    }
+
+    .container {
+        flex-direction: column;
+    }
+
+    .toolbar {
+        flex-direction: row;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid #ccc;
+        overflow-x: auto;
+        overflow-y: hidden;
+        white-space: nowrap;
+        padding: 5px;
+    }
+
+    .toolbar-btn {
+        margin: 0 5px;
+        padding: 6px;
+        flex-direction: row;
+        gap: 5px;
+
+        .material-icons {
+            font-size: 18px;
+        }
+
+        .btn-label {
+            font-size: 10px;
+            margin-top: 0;
+        }
+    }
+
+    .main-area {
+        padding: 10px;
+    }
+
+    .canvas {
+        max-width: 100%;
+        max-height: 80vh;
+    }
+
+    .canvas-container {
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .cropper-container {
+        width: fit-content;
+        height: fit-content;
+        padding: 5px;
+
+        image-cropper {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-width: none;
+            max-height: none;
+            object-fit: contain;
+        }
+    }
+
+    .text-frame-input{
+        width: fit-content;
+    }
+
+    .text-frame {
+        touch-action: none; 
+    }
+
+    .text-modal {
+        width: fit-content;
+        padding: 10px;
+        transform: translateX(0);
+        left: 7%;
+        top: 100px;
+    }
+
+    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
+        width: 100%;
+        padding: 10px;
+        transform: translateX(0);
+    }
+
+    .info-panel {
+        font-size: 11px;
+        padding: 6px;
+        top: 10px;
+        left: 10px;
+    }
+
+    .preview-container .preview-image {
+        max-width: 120px;
+        max-height: 120px;
+    }
+}
+
+/* Máy tính bảng (768px–991px) */
+@media (min-width: 768px) and (max-width: 991px) {
+    .header {
+        padding: 10px 15px;
+    }
+
+    .app-title {
+        font-size: 17px;
+    }
+
+    .header-btn {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+
+    .toolbar {
+        width: 70px;
+    }
+
+    .toolbar-btn {
+        margin: 6px 0;
+        padding: 6px;
+
+        .material-icons {
+            font-size: 18px;
+        }
+
+        .btn-label {
+            font-size: 10px;
+        }
+    }
+
+    .main-area {
+        padding: 15px;
+    }
+
+    .canvas {
+        max-width: 95%;
+        max-height: 85vh;
+    }
+
+    .cropper-container {
+        width: 95%;
+        padding: 8px;
+    }
+
+    .text-modal, .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
+        width: min(90%, 400px);
+    }
+
+    .info-panel {
+        font-size: 12px;
+        padding: 8px;
+    }
+}

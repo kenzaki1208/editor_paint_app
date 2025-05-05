@@ -18,8 +18,8 @@ export class PaintAppComponent {
     showCropper: boolean = false;
     imageWidth: number | null = null;
     imageHeight: number | null = null;
-    canvasWidth: number | null = null; 
-    canvasHeight: number | null = null;
+    canvasWidth: number = 0; 
+    canvasHeight: number = 0;
     private currentRotation: number = 0;
     cropperPosition: {x1: number, y1: number, x2: number, y2: number} | null = null;
     selectedAspectRatio: string = 'free';
@@ -106,6 +106,7 @@ export class PaintAppComponent {
     ngAfterViewInit() {
         this.ctx = this.canvas.nativeElement.getContext('2d')!;
         this.adjustCanvasSize();
+        this.adjustCropperContainerSize();
     }
 
     loadInitialState() {
@@ -143,13 +144,17 @@ export class PaintAppComponent {
         if (this.imageWidth && this.imageHeight && this.image.src && this.image.complete) {
             const ratio = Math.min(maxWidth / this.imageWidth, maxHeight / this.imageHeight, 1);
             this.scale = ratio;
+
             canvas.width = this.imageWidth * ratio;
             canvas.height = this.imageHeight * ratio;
             canvas.classList.add('responsive');
-    
+
             this.canvasWidth = canvas.width;
             this.canvasHeight = canvas.height;
-    
+
+            this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+            this.ctx.drawImage(this.image, 0, 0, this.imageWidth * ratio, this.imageHeight * ratio);
+
             this.redrawCanvas();
         } else {
             canvas.width = maxWidth;
@@ -164,6 +169,7 @@ export class PaintAppComponent {
     @HostListener('window:resize', ['$event'])
     onResize(event: Event) {
         this.adjustCanvasSize();
+        this.adjustCropperContainerSize();
     }
 
     // History Management
@@ -285,6 +291,25 @@ export class PaintAppComponent {
     }
 
     // Crop Image
+    adjustCropperContainerSize() {
+        if (this.showCropper && this.canvas && this.canvas.nativeElement) {
+            const canvas = this.canvas.nativeElement;
+            const cropperContainer = document.querySelector('.cropper-container') as HTMLElement;
+            if (cropperContainer) {
+                cropperContainer.style.width = `${canvas.width}px`;
+                cropperContainer.style.height = `${canvas.height}px`;
+    
+                const cropper = cropperContainer.querySelector('image-cropper');
+                if (cropper) {
+                    cropper.setAttribute('resizeToWidth', canvas.width.toString());
+                    cropper.setAttribute('resizeToHeight', canvas.height.toString());
+                }
+    
+                this.cdr.detectChanges();
+            }
+        }
+    }
+
     cropImage() {
     if (this.image.src) {
         if (this.imageWidth! > 4096 || this.imageHeight! > 4096) {
@@ -295,7 +320,6 @@ export class PaintAppComponent {
         this.showCropper = true;
         this.isLoading = true;
 
-        // Tạo sự kiện giả lập để truyền vào image-cropper
         this.imageChangedEvent = {
             target: {
                 files: [
@@ -386,6 +410,7 @@ export class PaintAppComponent {
     
             setTimeout(() => {
                 this.adjustCanvasSize();
+                this.adjustCropperContainerSize();
             }, 0);
         };
     
@@ -422,6 +447,7 @@ export class PaintAppComponent {
     
                 setTimeout(() => {
                     this.adjustCanvasSize();
+                    this.adjustCropperContainerSize();
                 }, 0);
             };
     
@@ -985,8 +1011,9 @@ export class PaintAppComponent {
                 interact('.marker')
                     .draggable({
                         onmove: (event) => {
-                            const deltaX = event.dx 
-                            const deltaY = event.dy 
+                            const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
+                            const deltaX = event.dx / scale;
+                            const deltaY = event.dy / scale; 
                             this.markerPosition.x += deltaX;
                             this.markerPosition.y += deltaY;
                             this.markerPosition.x = Math.max(0, Math.min(this.markerPosition.x, this.imageWidth! - 10));
@@ -1016,8 +1043,9 @@ export class PaintAppComponent {
                 interact('.text-frame')
                     .draggable({
                         onmove: (event) => {
-                            const deltaX = event.dx 
-                            const deltaY = event.dy 
+                            const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
+                            const deltaX = event.dx / scale;
+                            const deltaY = event.dy / scale;  
                             this.textFramePosition.x += deltaX;
                             this.textFramePosition.y += deltaY;
                             this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
@@ -1045,10 +1073,10 @@ export class PaintAppComponent {
                     .resizable({
                         edges: { left: true, right: true, bottom: true, top: true },
                         onmove: (event) => {
-                            this.textFramePosition.width = event.rect.width 
-                            this.textFramePosition.height = event.rect.height 
-                            this.textFramePosition.x = (event.rect.left - (this.canvas.nativeElement.getBoundingClientRect().left)) 
-                            this.textFramePosition.y = (event.rect.top - (this.canvas.nativeElement.getBoundingClientRect().top)) 
+                            this.textFramePosition.width = event.rect.width; 
+                            this.textFramePosition.height = event.rect.height; 
+                            this.textFramePosition.x = (event.rect.left - (this.canvas.nativeElement.getBoundingClientRect().left)); 
+                            this.textFramePosition.y = (event.rect.top - (this.canvas.nativeElement.getBoundingClientRect().top)); 
                             this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
                             this.textFramePosition.y = Math.max(0, Math.min(this.textFramePosition.y, this.imageHeight! - this.textFramePosition.height));
                             this.markerPosition.x = this.textFramePosition.x - 10;

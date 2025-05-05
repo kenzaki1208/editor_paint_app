@@ -219,6 +219,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     max-height: 100%; 
     width: auto;
     height: auto;
+    object-fit: contain;
 }
 
 .canvas-container {
@@ -229,6 +230,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     // align-items: center;
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     overflow: auto;
 }
 
@@ -241,6 +244,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     cursor: move;
     z-index: 22; 
     pointer-events: auto;
+}
+
+.marker, .text-frame {
+    transition: none !important;
 }
 
 .cropper-container {
@@ -258,18 +265,21 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     min-height: 0;
 
     image-cropper {
-        display: block;
-        width: 100%;
-        height: auto;
-        max-width: none;
-        max-height: none;
+        // display: block;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+        max-height: 100%;
         object-fit: contain;
     }
 
     img {
-        display: block !important;
+        // display: block !important;
+        width: 100% !important;
+        height: 100% !important;
         max-width: 100%;
         max-height: 100%;
+        object-fit: contain;
     }
 }
 
@@ -683,12 +693,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 
     .main-area {
-        padding: 10px;
+        justify-content: center;
+        align-items: center;
+        overflow: auto;
+        height: 100%;
+        width: 100%;
     }
 
     .canvas {
         max-width: 100%;
-        max-height: 80vh;
+        max-height: 100%;
     }
 
     .canvas-container {
@@ -748,7 +762,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 /* Máy tính bảng (768px–1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
+@media (min-width: 768px) and (max-width: 1025px) {
     .header {
         padding: 10px 15px;
     }
@@ -780,18 +794,48 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 
     .main-area {
-        padding: 15px;
+        justify-content: center;
+        align-items: center;
+        overflow: auto;
+        height: 100%;
+        width: 100%;
     }
 
     .canvas {
-        max-width: 95%;
-        max-height: 85vh;
+        max-width: 100%;
+        max-height: 100%;
+    }
+
+    .canvas-container {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
     }
 
     .cropper-container {
-        width: 95%;
+        width: 100%;
+        height: fit-content;
         padding: 8px;
+
+        image-cropper {
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        img {
+            // display: block !important;
+            width: 100% !important;
+            height: 100% !important;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
     }
+
+    
 
     .text-modal, .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
         width: min(90%, 400px);

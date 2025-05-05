@@ -71,6 +71,11 @@ export class PaintAppComponent {
     textFramePosition: { x: number, y: number, width: number, height: number } = { x: 0, y: 0, width: 200, height: 100 };
     textModalPosition: { x: number, y: number } = { x: 0, y: 0 };
     private scale: number = 1;
+    private startMousePosition = { x: 0, y: 0 }; 
+    private startMarkerPosition = { x: 0, y: 0 }; 
+    private startTextFramePosition = { x: 0, y: 0 };
+    private isDraggingMarker = false;
+    private isDraggingTextFrame = false;
 
     private texts: Array<{
         content: string;
@@ -1010,12 +1015,20 @@ export class PaintAppComponent {
             if (marker) {
                 interact('.marker')
                     .draggable({
+                        onstart: (event) => {
+                            this.isDraggingMarker = true;
+                            this.startMousePosition.x = event.clientX;
+                            this.startMousePosition.y = event.clientY;
+                            this.startMarkerPosition.x = this.markerPosition.x;
+                            this.startMarkerPosition.y = this.markerPosition.y;
+                        },
                         onmove: (event) => {
+                            if (!this.isDraggingMarker) return;
                             const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
-                            const deltaX = event.dx / scale;
-                            const deltaY = event.dy / scale; 
-                            this.markerPosition.x += deltaX;
-                            this.markerPosition.y += deltaY;
+                            const deltaX = (event.clientX - this.startMousePosition.x) / scale;
+                            const deltaY = (event.clientY - this.startMousePosition.y) / scale;
+                            this.markerPosition.x = this.startMarkerPosition.x + deltaX;
+                            this.markerPosition.y = this.startMarkerPosition.y + deltaY;
                             this.markerPosition.x = Math.max(0, Math.min(this.markerPosition.x, this.imageWidth! - 10));
                             this.markerPosition.y = Math.max(0, Math.min(this.markerPosition.y, this.imageHeight! - 10));
                             this.textFramePosition.x = this.markerPosition.x + 10;
@@ -1023,14 +1036,11 @@ export class PaintAppComponent {
                             // this.updateTextModalPosition();
                             this.cdr.detectChanges();
                         },
+                        onend: () => {
+                            this.isDraggingMarker = false;
+                        },
                         modifiers: [
                             interact.modifiers.restrictRect({
-                                // restriction:{
-                                //     left: 0,
-                                //     top: 0,
-                                //     right: this.canvasWidth!,
-                                //     bottom: this.canvasHeight!
-                                // },
                                 endOnly: false
                             })
                         ],
@@ -1042,12 +1052,20 @@ export class PaintAppComponent {
                 this.renderer.addClass(textFrame, 'show');
                 interact('.text-frame')
                     .draggable({
+                        onstart: (event) => {
+                            this.isDraggingTextFrame = true;
+                            this.startMousePosition.x = event.clientX;
+                            this.startMousePosition.y = event.clientY;
+                            this.startTextFramePosition.x = this.textFramePosition.x;
+                            this.startTextFramePosition.y = this.textFramePosition.y;
+                        },
                         onmove: (event) => {
+                            if (!this.isDraggingTextFrame) return;
                             const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
-                            const deltaX = event.dx / scale;
-                            const deltaY = event.dy / scale;  
-                            this.textFramePosition.x += deltaX;
-                            this.textFramePosition.y += deltaY;
+                            const deltaX = (event.clientX - this.startMousePosition.x) / scale;
+                            const deltaY = (event.clientY - this.startMousePosition.y) / scale;
+                            this.textFramePosition.x = this.startTextFramePosition.x + deltaX;
+                            this.textFramePosition.y = this.startTextFramePosition.y + deltaY;
                             this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
                             this.textFramePosition.y = Math.max(0, Math.min(this.textFramePosition.y, this.imageHeight! - this.textFramePosition.height));
                             this.markerPosition.x = this.textFramePosition.x - 10;
@@ -1056,14 +1074,11 @@ export class PaintAppComponent {
                             this.previewText();
                             this.cdr.detectChanges();
                         },
+                        onend: () => {
+                            this.isDraggingTextFrame = false;
+                        },
                         modifiers: [
                             interact.modifiers.restrictRect({
-                                // restriction: {
-                                //     left: 0,
-                                //     top: 0,
-                                //     right: this.canvasWidth!,
-                                //     bottom: this.canvasHeight!
-                                // },
                                 endOnly: false
                             })
                         ],
@@ -1075,8 +1090,8 @@ export class PaintAppComponent {
                         onmove: (event) => {
                             this.textFramePosition.width = event.rect.width; 
                             this.textFramePosition.height = event.rect.height; 
-                            this.textFramePosition.x = (event.rect.left - (this.canvas.nativeElement.getBoundingClientRect().left)); 
-                            this.textFramePosition.y = (event.rect.top - (this.canvas.nativeElement.getBoundingClientRect().top)); 
+                            this.textFramePosition.x = (event.rect.left - (this.canvas.nativeElement.getBoundingClientRect().left)) 
+                            this.textFramePosition.y = (event.rect.top - (this.canvas.nativeElement.getBoundingClientRect().top)) 
                             this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
                             this.textFramePosition.y = Math.max(0, Math.min(this.textFramePosition.y, this.imageHeight! - this.textFramePosition.height));
                             this.markerPosition.x = this.textFramePosition.x - 10;
@@ -1090,12 +1105,6 @@ export class PaintAppComponent {
                                 min: { width: 50, height: 50 }
                             }),
                             interact.modifiers.restrictRect({
-                                // restriction: {
-                                //     left: 0,
-                                //     top: 0,
-                                //     right: this.canvasWidth!,
-                                //     bottom: this.canvasHeight!
-                                // }
                             })
                         ],
                         inertia: false,
@@ -1187,6 +1196,11 @@ export class PaintAppComponent {
         this.textFramePosition = { x: 0, y: 0, width: 200, height: 100 };
         this.textModalPosition = { x: 0, y: 0 };
         this.markerPosition = { x: 0, y: 0 }; 
+        this.isDraggingMarker = false; 
+        this.isDraggingTextFrame = false; 
+        this.startMousePosition = { x: 0, y: 0 };
+        this.startMarkerPosition = { x: 0, y: 0 }; 
+        this.startTextFramePosition = { x: 0, y: 0 };
         const textFrame = document.querySelector('.text-frame');
         if (textFrame) {
             this.renderer.removeClass(textFrame, 'show');

@@ -667,6 +667,11 @@ export class PaintAppComponent {
         this.sharpness = 0;
         this.currentRotation = 0;
         this.texts = [];
+        this.isDraggingMarker = false; 
+        this.isDraggingTextFrame = false; 
+        this.startMousePosition = { x: 0, y: 0 };
+        this.startMarkerPosition = { x: 0, y: 0 }; 
+        this.startTextFramePosition = { x: 0, y: 0 };
         this.applyFilters();
         this.saveState();
         if (this.originalImage) {

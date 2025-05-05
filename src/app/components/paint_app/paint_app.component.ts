@@ -298,16 +298,15 @@ export class PaintAppComponent {
     // Crop Image
     adjustCropperContainerSize() {
         if (this.showCropper && this.canvas && this.canvas.nativeElement) {
-            const canvas = this.canvas.nativeElement;
             const cropperContainer = document.querySelector('.cropper-container') as HTMLElement;
-            if (cropperContainer) {
-                cropperContainer.style.width = `${canvas.width}px`;
-                cropperContainer.style.height = `${canvas.height}px`;
+            if (cropperContainer && this.imageWidth && this.imageHeight) {
+                cropperContainer.style.width = `${this.imageWidth}px`;
+                cropperContainer.style.height = `${this.imageHeight}px`;
     
                 const cropper = cropperContainer.querySelector('image-cropper');
                 if (cropper) {
-                    cropper.setAttribute('resizeToWidth', canvas.width.toString());
-                    cropper.setAttribute('resizeToHeight', canvas.height.toString());
+                    cropper.setAttribute('resizeToWidth', this.imageWidth.toString());
+                    cropper.setAttribute('resizeToHeight', this.imageHeight.toString());
                 }
     
                 this.cdr.detectChanges();
@@ -333,6 +332,9 @@ export class PaintAppComponent {
             }
         };
         this.cdr.detectChanges();
+        setTimeout(() => {
+            this.adjustCropperContainerSize();
+        }, 0);
         } else {
             this.showToastNotification('Vui lòng chọn một ảnh trước khi cắt.');
         }

@@ -6,6 +6,7 @@ import interact from 'interactjs';
     selector: "app-paint-app",
     templateUrl: "./paint_app.component.html",
     styleUrls: ["./paint_app.component.scss"],
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
 
 export class PaintAppComponent {
@@ -51,31 +52,41 @@ export class PaintAppComponent {
     private tempRotation: number = 0; 
     private originalRotation: number = 0;
 
+    isRotateMode: boolean = false;
+    isBrushMode: boolean = false; 
+    isFilterAdjustMode: boolean = false;
+
     private isDrawing = false;
     brushSize = 5;
     brushColor = '#000000';
     showBrushModal: boolean = false;
     isDrawingMode: boolean = false;
+    public drawings: Array<{
+        points: { x: number; y: number }[];
+        color: string;
+        size: number;
+    }> = [];
+    public brushStrokes: Array<{
+        points: { x: number; y: number }[];
+        color: string;
+        size: number;
+    }> = [];
+    private currentDrawing: { points: { x: number; y: number }[]; color: string; size: number } | null = null;
 
     showSaveModal: boolean = false;
     saveFormat: string = 'png'; 
     saveQuality: number = 1;
 
-    showTextModal: boolean = false;
+    textToolState: 'inactive' | 'placing' | 'editing' = 'inactive';
     textContent: string = '';
     textFont: string = 'Arial';
     textSize: number = 20;
     textColor: string = '#000000';
-    isTextMode: boolean = false;
+    showTextModal: boolean = false;
     showTextFrame: boolean = false;
     textFramePosition: { x: number, y: number, width: number, height: number } = { x: 0, y: 0, width: 200, height: 100 };
-    textModalPosition: { x: number, y: number } = { x: 0, y: 0 };
     private scale: number = 1;
-    private startMousePosition = { x: 0, y: 0 }; 
-    private startMarkerPosition = { x: 0, y: 0 }; 
-    private startTextFramePosition = { x: 0, y: 0 };
-    private isDraggingMarker = false;
-    private isDraggingTextFrame = false;
+    private debounceTimeout: any;
 
     private texts: Array<{
         content: string;
@@ -87,9 +98,6 @@ export class PaintAppComponent {
         size: number;
         color: string;
     }> = [];
-
-    public markerPosition: { x: number, y: number } = { x: 0, y: 0 }; 
-    public showMarker: boolean = false; 
 
     showPresetFilterModal: boolean = false;
     selectedPresetFilter: string = 'vintage'; 
@@ -175,6 +183,7 @@ export class PaintAppComponent {
     onResize(event: Event) {
         this.adjustCanvasSize();
         this.adjustCropperContainerSize();
+        this.redrawCanvas();
     }
 
     // History Management
@@ -495,6 +504,7 @@ export class PaintAppComponent {
 
     // Rotate Image
     openRotateModal() {
+        this.isRotateMode = true;
         this.showRotateModal = true;
         this.tempRotation = this.currentRotation;
         this.originalRotation = this.currentRotation;
@@ -528,6 +538,7 @@ export class PaintAppComponent {
         this.imageWidth = newWidth;
         this.imageHeight = newHeight;
 
+        this.redrawCanvas();
         this.adjustCanvasSize();
         this.cdr.detectChanges();
     }
@@ -568,6 +579,7 @@ export class PaintAppComponent {
         this.imageWidth = newWidth;
         this.imageHeight = newHeight;
         this.isLoading = false;
+        this.redrawCanvas();
         this.saveState();
         this.cdr.detectChanges();
     }
@@ -591,6 +603,7 @@ export class PaintAppComponent {
             this.renderer.removeClass(rotateModal, 'show');
         }
         this.showRotateModal = false;
+        this.isRotateMode = false;
         this.cdr.detectChanges();
     }
 
@@ -668,12 +681,9 @@ export class PaintAppComponent {
         this.hue = 0;
         this.sharpness = 0;
         this.currentRotation = 0;
+        this.drawings = [];
+        this.brushStrokes = [];
         this.texts = [];
-        this.isDraggingMarker = false; 
-        this.isDraggingTextFrame = false; 
-        this.startMousePosition = { x: 0, y: 0 };
-        this.startMarkerPosition = { x: 0, y: 0 }; 
-        this.startTextFramePosition = { x: 0, y: 0 };
         this.applyFilters();
         this.saveState();
         if (this.originalImage) {
@@ -720,6 +730,9 @@ export class PaintAppComponent {
     }
 
     openPresetFilterModal() {
+        this.closeTextFrame();
+        this.showAdjustModal = false; 
+        this.showBrushModal = false;
         this.showPresetFilterModal = true;
         this.selectedPresetFilter = 'vintage'; 
         this.cdr.detectChanges();
@@ -728,6 +741,7 @@ export class PaintAppComponent {
     applyPresetFilterModal() {
         this.applyPresetFilter(this.selectedPresetFilter); 
         this.showPresetFilterModal = false;
+        this.redrawCanvas();
         this.cdr.detectChanges();
     }
 
@@ -738,6 +752,10 @@ export class PaintAppComponent {
 
     // Adjust Modal
     openAdjustModal(type: string) {
+        this.closeTextFrame(); 
+        this.showBrushModal = false; 
+        this.showPresetFilterModal = false;
+        this.isFilterAdjustMode = true;
         this.showAdjustModal = true;
         this.adjustModalType = type;
 
@@ -800,6 +818,7 @@ export class PaintAppComponent {
     applyAdjust() {
         this.saveState();
         this.showAdjustModal = false;
+        this.redrawCanvas();
         this.cdr.detectChanges();
     }
 
@@ -825,19 +844,23 @@ export class PaintAppComponent {
 
     // Brush (Drawing)
     openBrushModal() {
+        // if(this.isBrushMode == true) this.saveImage()
+        this.isBrushMode = true;
+        this.closeTextFrame(); 
+        this.showAdjustModal = false; 
+        this.showPresetFilterModal = false;
         this.showBrushModal = true;
         this.cdr.detectChanges();
     }
 
     applyBrush() {
         this.isDrawingMode = true;
-        this.isTextMode = false;
-        this.redrawCanvas();
+        // this.redrawCanvas();
         const brushModal = document.querySelector('.brush-modal');
         if (brushModal) {
             this.renderer.removeClass(brushModal, 'show');
         }
-        this.showBrushModal = false;
+        this.showBrushModal = true;
         this.showToastNotification('Cọ vẽ đã được thiết lập. Bạn có thể vẽ trên ảnh!');
         this.cdr.detectChanges();
     }
@@ -848,141 +871,224 @@ export class PaintAppComponent {
             this.renderer.removeClass(brushModal, 'show');
         }
         this.showBrushModal = false;
+        this.isFilterAdjustMode = false;
+        this.cdr.detectChanges();
+    }
+
+    saveBrushDrawing() {
+        if (this.drawings.length === 0) {
+          this.showToastNotification('Không có nét vẽ nào để lưu.');
+          return;
+        }
+      
+        this.drawings.forEach(drawing => {
+            this.ctx.beginPath();
+            this.ctx.lineWidth = drawing.size;
+            this.ctx.strokeStyle = drawing.color;
+            drawing.points.forEach((point, index) => {
+                if (index === 0) this.ctx.moveTo(point.x, point.y);
+                else this.ctx.lineTo(point.x, point.y);
+            });
+            this.ctx.stroke();
+        });
+      
+        this.saveState();
+      
+        this.drawings = [];
+      
+        const saveButton = document.querySelector('.brush-modal .save-button');
+        if (saveButton) {
+            this.renderer.removeClass(saveButton, 'show');
+        }
+        this.showToastNotification('Nét vẽ đã được lưu thành công!');
         this.cdr.detectChanges();
     }
 
     startDrawing(event: MouseEvent) {
+        this.isBrushMode = true;
         if (!this.hasImage) {
             this.showToastNotification('Vui lòng tải ảnh trước khi vẽ.');
             return;
         }
-        if (this.isDrawingMode) {
+        if (this.isDrawingMode && !this.showTextFrame) {
             this.isDrawing = true;
             this.ctx.beginPath();
             this.ctx.lineWidth = this.brushSize;
             this.ctx.strokeStyle = this.brushColor;
-            const rect = this.canvas.nativeElement.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+            const { x, y } = this.getCanvasCoordinates(event);
             this.ctx.moveTo(x, y);
+            this.currentDrawing = {
+                points: [{ x, y }],
+                color: this.brushColor,
+                size: this.brushSize
+            };
         }
     }
     
     draw(event: MouseEvent) {
-        if (this.isDrawingMode && this.isDrawing) {
-            const rect = this.canvas.nativeElement.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
+        if (!this.hasImage) return;
+        if (this.isDrawingMode && this.isDrawing && !this.showTextFrame) {
+            const { x, y } = this.getCanvasCoordinates(event);
             this.ctx.lineTo(x, y);
             this.ctx.stroke();
+            this.currentDrawing!.points.push({ x, y });
         }
     }
     
     stopDrawing(event: MouseEvent) {
-        if (this.isDrawingMode && this.isDrawing) {
+        if (!this.hasImage) return;
+        if (this.isDrawingMode && this.isDrawing && !this.showTextFrame) {
             this.isDrawing = false;
+            this.brushStrokes.push(this.currentDrawing!);
+            this.currentDrawing = null;
             this.saveState();
         }
     }
 
     redrawCanvas() {
-        const canvasWidth = this.canvas.nativeElement.width;
-        const canvasHeight = this.canvas.nativeElement.height;
+        const canvas = this.canvas.nativeElement;
+        this.ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-        this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-    
-        if (this.image && this.image.src && this.image.complete) {
-            this.ctx.filter = `
-                brightness(${this.brightness}%)
-                contrast(${this.contrast}%)
-                saturate(${this.saturation}%)
-                hue-rotate(${this.hue}deg)
-            `;
-            this.ctx.drawImage(this.image, 0, 0, canvasWidth, canvasHeight);
-            this.ctx.filter = 'none';
-        } else {
-            console.warn('No image to redraw or image not loaded:', this.image);
-        }
-    
-        this.texts.forEach(text => {
+        if (this.image.src) {
             this.ctx.save();
-            this.ctx.font = `${text.size}px ${text.font}`;
-            this.ctx.fillStyle = text.color;
+            this.ctx.translate(canvas.width / 2, canvas.height / 2);
+            this.ctx.rotate(this.currentRotation);
+            this.ctx.filter = `brightness(${this.brightness}%) contrast(${this.contrast}%) saturate(${this.saturation}%) hue-rotate(${this.hue}deg)`;
+            this.ctx.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, this.image.width, this.image.height);
+            this.ctx.filter = 'none';
+            
+            this.brushStrokes.forEach(stroke => {
+                this.ctx.save();
+                this.ctx.beginPath();
+                this.ctx.lineWidth = stroke.size;
+                this.ctx.strokeStyle = stroke.color;
+    
+                stroke.points.forEach((point, index) => {
+                    // Tọa độ tương đối so với tâm ảnh
+                    const adjustedX = point.x - this.image.width / 2;
+                    const adjustedY = point.y - this.image.height / 2;
+    
+                    if (index === 0) {
+                        this.ctx.moveTo(adjustedX, adjustedY);
+                    } else {
+                        this.ctx.lineTo(adjustedX, adjustedY);
+                    }
+                });
+                this.ctx.stroke();
+                this.ctx.restore();
+            });
+
+            this.texts.forEach(text => {
+                this.ctx.save();
+                const adjustedX = text.x - this.image.width / 2;
+                const adjustedY = text.y - this.image.height / 2;
+                const adjustedWidth = text.width;
+                const adjustedHeight = text.height;
+                const adjustedSize = text.size;
+                
+                this.ctx.font = `${adjustedSize}px ${text.font}`;
+                this.ctx.fillStyle = text.color;
+                this.ctx.textBaseline = 'top';
+        
+                const words = text.content.split(' ');
+                let line = '';
+                const lineHeight = adjustedSize * 1.2;
+                let currentY = adjustedY;
+        
+                for (let i = 0; i < words.length; i++) {
+                    const testLine = line + words[i] + ' ';
+                    const metrics = this.ctx.measureText(testLine);
+                    const testWidth = metrics.width;
+        
+                    if (testWidth > adjustedWidth && i > 0) {
+                        this.ctx.fillText(line, adjustedX, currentY);
+                        line = words[i] + ' ';
+                        currentY += lineHeight;
+                    } else {
+                        line = testLine;
+                    }
+        
+                    if (currentY + lineHeight > adjustedY + adjustedHeight) break;
+                }
+                this.ctx.fillText(line, adjustedX, currentY);
+                this.ctx.restore();
+            });
+            this.ctx.restore();
+        }
+        this.cdr.detectChanges();
+    }
+
+    //Text tool
+    getCanvasCoordinates(event: MouseEvent): { x: number; y: number } {
+        const canvas = this.canvas.nativeElement;
+        const rect = canvas.getBoundingClientRect();
+        const scale = this.scale;
+        const x = (event.clientX - rect.left) / scale;
+        const y = (event.clientY - rect.top) / scale;
+        if (this.currentRotation !== 0) {
+            const cosA = Math.cos(this.currentRotation);
+            const sinA = Math.sin(this.currentRotation);
+            const centerX = this.imageWidth! / 2;
+            const centerY = this.imageHeight! / 2;
+            const dx = x - centerX;
+            const dy = y - centerY;
+            return {
+                x: centerX + (dx * cosA - dy * sinA),
+                y: centerY + (dx * sinA + dy * cosA)
+            };
+        }
+        return { x: Math.max(0, Math.min(x, this.imageWidth!)), y: Math.max(0, Math.min(y, this.imageHeight!)) };
+    }
+
+    public previewText() {
+        if (this.debounceTimeout) clearTimeout(this.debounceTimeout);
+        this.debounceTimeout = setTimeout(() => {
+            this.redrawCanvas();
+    
+            if (!this.showTextFrame || !this.textContent.trim()) return;
+    
+            const canvasWidth = this.canvas.nativeElement.width;
+            const canvasHeight = this.canvas.nativeElement.height;
+            const imageWidth = this.imageWidth || canvasWidth;
+            const imageHeight = this.imageHeight || canvasHeight;
+    
+            const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
+    
+            const x = this.textFramePosition.x;
+            const y = this.textFramePosition.y;
+            const width = this.textFramePosition.width;
+            const height = this.textFramePosition.height;
+            const adjustedTextSize = this.textSize;
+    
+            this.ctx.save();
+            this.ctx.font = `${adjustedTextSize}px ${this.textFont}`;
+            this.ctx.fillStyle = this.textColor;
             this.ctx.textBaseline = 'top';
     
-            const words = text.content.split(' ');
+            const words = this.textContent.split(' ');
             let line = '';
-            const lineHeight = text.size * 1.2;
-            let currentY = text.y;
+            const lineHeight = adjustedTextSize * 1.2;
+            let currentY = y;
     
             for (let i = 0; i < words.length; i++) {
                 const testLine = line + words[i] + ' ';
                 const metrics = this.ctx.measureText(testLine);
                 const testWidth = metrics.width;
     
-                if (testWidth > text.width && i > 0) {
-                    this.ctx.fillText(line, text.x, currentY);
+                if (testWidth > width && i > 0) {
+                    this.ctx.fillText(line, x, currentY);
                     line = words[i] + ' ';
                     currentY += lineHeight;
                 } else {
                     line = testLine;
                 }
     
-                if (currentY + lineHeight > text.y + text.height) break;
+                if (currentY + lineHeight > y + height) break;
             }
     
-            this.ctx.fillText(line, text.x, currentY);
+            this.ctx.fillText(line, x, currentY);
             this.ctx.restore();
-        });
-    }
-
-    //Text tool
-    public previewText() {
-        this.redrawCanvas();
-
-        if (!this.showTextFrame || !this.textContent.trim()) return;
-
-        const canvasWidth = this.canvas.nativeElement.width;
-        const canvasHeight = this.canvas.nativeElement.height;
-        const imageWidth = this.imageWidth || canvasWidth;
-        const imageHeight = this.imageHeight || canvasHeight;
-
-        const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
-
-        const x = this.textFramePosition.x;
-        const y = this.textFramePosition.y;
-        const width = this.textFramePosition.width;
-        const height = this.textFramePosition.height;
-        const adjustedTextSize = this.textSize;
-
-        this.ctx.save();
-        this.ctx.font = `${adjustedTextSize}px ${this.textFont}`;
-        this.ctx.fillStyle = this.textColor;
-        this.ctx.textBaseline = 'top';
-
-        const words = this.textContent.split(' ');
-        let line = '';
-        const lineHeight = adjustedTextSize * 1.2;
-        let currentY = y;
-
-        for (let i = 0; i < words.length; i++) {
-            const testLine = line + words[i] + ' ';
-            const metrics = this.ctx.measureText(testLine);
-            const testWidth = metrics.width;
-
-            if (testWidth > width && i > 0) {
-                this.ctx.fillText(line, x, currentY);
-                line = words[i] + ' ';
-                currentY += lineHeight;
-            } else {
-                line = testLine;
-            }
-
-            if (currentY + lineHeight > y + height) break;
-        }
-
-        this.ctx.fillText(line, x, currentY);
-        this.ctx.restore();
+        }, 100);
     }
 
     openTextModal() {
@@ -990,202 +1096,79 @@ export class PaintAppComponent {
             this.showToastNotification('Vui lòng tải ảnh trước khi thêm văn bản.');
             return;
         }
-        this.isTextMode = true;
-        this.isDrawingMode = false;
-        this.textContent = '';
-        this.textFont = 'Arial';
-        this.textSize = 20;
-        this.textColor = '#000000';
-        this.showTextFrame = true;
-        this.showTextModal = true;
-        this.showMarker = true;
+        // console.log('Opening text modal, current state:', this.textToolState, this.showTextFrame, this.showTextModal);
+        this.textToolState = 'placing';
+        this.cdr.detectChanges();
+    }
 
-        this.markerPosition = { x: 10, y: 10 };
-
-        const frameWidth = 200;
-        const frameHeight = 100;
-        this.textFramePosition = {
-            x: this.markerPosition.x,
-            y: this.markerPosition.y,
-            width: frameWidth,
-            height: frameHeight
-        };
-
-        const offsetY = 10; 
-        this.textModalPosition = {
-            x: this.textFramePosition.x,
-            y: this.textFramePosition.y + this.textFramePosition.height + offsetY
-        };
-
-        setTimeout(() => {
-            const marker = document.querySelector('.marker');
-            if (marker) {
-                interact('.marker')
-                    .draggable({
-                        onstart: (event) => {
-                            this.isDraggingMarker = true;
-                            this.startMousePosition.x = event.clientX;
-                            this.startMousePosition.y = event.clientY;
-                            this.startMarkerPosition.x = this.markerPosition.x;
-                            this.startMarkerPosition.y = this.markerPosition.y;
-                        },
-                        onmove: (event) => {
-                            if (!this.isDraggingMarker) return;
-                            const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
-                            const deltaX = (event.clientX - this.startMousePosition.x) / scale;
-                            const deltaY = (event.clientY - this.startMousePosition.y) / scale;
-                            this.markerPosition.x = this.startMarkerPosition.x + deltaX;
-                            this.markerPosition.y = this.startMarkerPosition.y + deltaY;
-                            this.markerPosition.x = Math.max(0, Math.min(this.markerPosition.x, this.imageWidth! - 10));
-                            this.markerPosition.y = Math.max(0, Math.min(this.markerPosition.y, this.imageHeight! - 10));
-                            this.textFramePosition.x = this.markerPosition.x + 10;
-                            this.textFramePosition.y = this.markerPosition.y + 10;
-                            // this.updateTextModalPosition();
-                            this.cdr.detectChanges();
-                        },
-                        onend: () => {
-                            this.isDraggingMarker = false;
-                        },
-                        modifiers: [
-                            interact.modifiers.restrictRect({
-                                endOnly: false
-                            })
-                        ],
-                    });
-            }
-
-            const textFrame = document.querySelector('.text-frame');
-            if (textFrame) {
-                this.renderer.addClass(textFrame, 'show');
+    onCanvasClick(event: MouseEvent) {
+        if (this.textToolState === 'placing') {
+            const { x, y } = this.getCanvasCoordinates(event);
+            this.textFramePosition = { x, y, width: 200, height: 100 };
+            this.textContent = '';
+            this.showTextFrame = true;
+            // this.showTextModal = true;
+            this.textToolState = 'editing';
+            this.cdr.detectChanges();
+            setTimeout(() => {
                 interact('.text-frame')
                     .draggable({
-                        onstart: (event) => {
-                            this.isDraggingTextFrame = true;
-                            this.startMousePosition.x = event.clientX;
-                            this.startMousePosition.y = event.clientY;
-                            this.startTextFramePosition.x = this.textFramePosition.x;
-                            this.startTextFramePosition.y = this.textFramePosition.y;
-                        },
                         onmove: (event) => {
-                            if (!this.isDraggingTextFrame) return;
-                            const scale = Math.min(this.canvas.nativeElement.width / this.imageWidth!, this.canvas.nativeElement.height / this.imageHeight!);
-                            const deltaX = (event.clientX - this.startMousePosition.x) / scale;
-                            const deltaY = (event.clientY - this.startMousePosition.y) / scale;
-                            this.textFramePosition.x = this.startTextFramePosition.x + deltaX;
-                            this.textFramePosition.y = this.startTextFramePosition.y + deltaY;
-                            this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
-                            this.textFramePosition.y = Math.max(0, Math.min(this.textFramePosition.y, this.imageHeight! - this.textFramePosition.height));
-                            this.markerPosition.x = this.textFramePosition.x - 10;
-                            this.markerPosition.y = this.textFramePosition.y - 10;
-                            // this.updateTextModalPosition();
-                            this.previewText();
+                            const { x, y } = this.getCanvasCoordinates(event);
+                            this.textFramePosition.x = x;
+                            this.textFramePosition.y = y;
                             this.cdr.detectChanges();
-                        },
-                        onend: () => {
-                            this.isDraggingTextFrame = false;
-                        },
-                        modifiers: [
-                            interact.modifiers.restrictRect({
-                                endOnly: false
-                            })
-                        ],
-                        inertia: false,
-                        autoScroll: false,
+                        }
                     })
                     .resizable({
                         edges: { left: true, right: true, bottom: true, top: true },
                         onmove: (event) => {
-                            this.textFramePosition.width = event.rect.width; 
-                            this.textFramePosition.height = event.rect.height; 
-                            this.textFramePosition.x = (event.rect.left - (this.canvas.nativeElement.getBoundingClientRect().left)) 
-                            this.textFramePosition.y = (event.rect.top - (this.canvas.nativeElement.getBoundingClientRect().top)) 
-                            this.textFramePosition.x = Math.max(0, Math.min(this.textFramePosition.x, this.imageWidth! - this.textFramePosition.width));
-                            this.textFramePosition.y = Math.max(0, Math.min(this.textFramePosition.y, this.imageHeight! - this.textFramePosition.height));
-                            this.markerPosition.x = this.textFramePosition.x - 10;
-                            this.markerPosition.y = this.textFramePosition.y - 10;
-                            // this.updateTextModalPosition();
-                            this.previewText();
+                            const rect = this.canvas.nativeElement.getBoundingClientRect();
+                            this.textFramePosition.width = event.rect.width / this.scale;
+                            this.textFramePosition.height = event.rect.height / this.scale;
+                            this.textFramePosition.x = (event.rect.left - rect.left) / this.scale;
+                            this.textFramePosition.y = (event.rect.top - rect.top) / this.scale;
                             this.cdr.detectChanges();
-                        },
-                        modifiers: [
-                            interact.modifiers.restrictSize({
-                                min: { width: 50, height: 50 }
-                            }),
-                            interact.modifiers.restrictRect({
-                            })
-                        ],
-                        inertia: false,
-                        preserveAspectRatio: false
+                        }
                     });
-            }
-            const textModal = document.querySelector('.text-modal') as HTMLElement;
-            if (textModal) {
-                this.renderer.addClass(textModal, 'show');
-                this.renderer.setAttribute(textModal, 'tabindex', '0');
-                textModal.focus();
-            }
-        }, 0);
+            }, 0);
+
+            setTimeout(() => {
+                const textInput = document.querySelector('.text-input') as HTMLElement;
+                if (textInput) {
+                    textInput.focus();
+                    if (textInput) {
+                        textInput.focus();
+                        textInput.innerHTML = '';
+                    }
+                }
+            }, 0);
+        }
+    }
+
+    updateTextContent(event: Event) {
+        const target = event.target as HTMLElement;
+        this.textContent = target.innerText.trim();
+        // this.redrawCanvas();
+        this.previewText();
         this.cdr.detectChanges();
     }
 
-    // updateTextModalPosition() {
-    //     const offsetY = 10;
-      
-    //     const frame = document.querySelector('.text-frame') as HTMLElement;
-    //     if (!frame) return;
-      
-    //     const rect = frame.getBoundingClientRect();
-    //     const canvasRect = this.canvas.nativeElement.getBoundingClientRect();
-      
-    //     const modalX = rect.left - canvasRect.left;
-    //     const modalY = rect.bottom - canvasRect.top + offsetY;
-      
-    //     this.textModalPosition = {
-    //       x: modalX,
-    //       y: modalY
-    //     };
-      
-    //     this.textModalPosition.x = Math.max(0, Math.min(this.textModalPosition.x, this.canvasWidth!));
-    //     this.textModalPosition.y = Math.max(0, Math.min(this.textModalPosition.y, this.canvasHeight!));
-    // }
-
     applyText() {
-        if (!this.textContent.trim() || !this.textFramePosition) {
-            this.showToastNotification('Vui lòng nhập văn bản trước khi áp dụng.');
+        if (!this.textContent.trim()) {
+            this.showToastNotification('Vui lòng nhập văn bản.');
             return;
         }
-    
-        this.adjustCanvasSize();
-    
-        const canvasWidth = this.canvas.nativeElement.width;
-        const canvasHeight = this.canvas.nativeElement.height;
-        const imageWidth = this.imageWidth || canvasWidth;
-        const imageHeight = this.imageHeight || canvasHeight;
-    
-        const scale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
-    
-        const x = this.textFramePosition.x;
-        const y = this.textFramePosition.y;
-        const width = this.textFramePosition.width;
-        const height = this.textFramePosition.height;
-        const adjustedTextSize = this.textSize;
-    
-        if (x < 0 || y < 0 || x > canvasWidth || y > canvasHeight) {
-            console.warn('Vị trí văn bản nằm ngoài ranh giới canvas:', { x, y });
-            return;
-        }
-    
         this.texts.push({
             content: this.textContent,
-            x: x,
-            y: y,
-            width: width,
-            height: height,
+            x: this.textFramePosition.x, 
+            y: this.textFramePosition.y,
+            width: this.textFramePosition.width,
+            height: this.textFramePosition.height,
             font: this.textFont,
-            size: adjustedTextSize,
+            size: this.textSize,
             color: this.textColor
         });
-    
         this.redrawCanvas();
         this.saveState();
         this.closeTextFrame();
@@ -1196,27 +1179,19 @@ export class PaintAppComponent {
     }
 
     closeTextFrame() {
-        this.isTextMode = false;
+        console.log('Closing text frame, resetting state...');
+        this.textToolState = 'inactive';
         this.showTextFrame = false;
         this.showTextModal = false;
-        this.showMarker = false; 
+        this.textContent = '';
+        this.textFont = 'Arial';
+        this.textSize = 20;
+        this.textColor = '#000000';
         this.textFramePosition = { x: 0, y: 0, width: 200, height: 100 };
-        this.textModalPosition = { x: 0, y: 0 };
-        this.markerPosition = { x: 0, y: 0 }; 
-        this.isDraggingMarker = false; 
-        this.isDraggingTextFrame = false; 
-        this.startMousePosition = { x: 0, y: 0 };
-        this.startMarkerPosition = { x: 0, y: 0 }; 
-        this.startTextFramePosition = { x: 0, y: 0 };
-        const textFrame = document.querySelector('.text-frame');
-        if (textFrame) {
-            this.renderer.removeClass(textFrame, 'show');
-        }
-        const textModal = document.querySelector('.text-modal');
-        if (textModal) {
-            this.renderer.removeClass(textModal, 'show');
-        }
+        interact('.text-frame').unset();
+        this.redrawCanvas();
         this.cdr.detectChanges();
+        console.log('Text frame closed, new state:', this.textToolState, this.showTextFrame, this.showTextModal);
     }
 
     //showToastNotification

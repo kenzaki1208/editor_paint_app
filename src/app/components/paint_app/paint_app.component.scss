@@ -34,7 +34,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         //     background-color: rgba(255, 255, 255, 0.1);
         // }
 
-        .cropper-container, .save-modal, .text-modal, .text-frame-container, 
+        .cropper-container, .save-modal, .text-frame-container, 
         .rotate-modal, .adjust-modal, .save-modal, .brush-modal {
             background: #828282;
             border: 1px solid #a3a2a2;
@@ -161,25 +161,6 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     display: none;
 }
 
-// .info-bar, .cropper-info {
-//     position: absolute;
-//     background-color: rgba(0, 0, 0, 0.7);
-//     color: white;
-//     padding: 8px 12px;
-//     border-radius: 5px;
-//     font-size: 14px;
-//     z-index: 10;
-// }
-// .info-bar {
-//     top: 20px;
-//     left: 20px;
-// }
-
-// .cropper-info {
-//     top: 20px;
-//     left: 150px;
-// }
-
 .info-panel {
     position: fixed;
     // top: 61px; 
@@ -205,13 +186,16 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     max-height: 100%;
     width: auto;
     height: auto;
-    border: 1px solid #ccc;
-    border-radius: 10px;
+    margin: 0;
+    padding: 0;
+    // border: 1px solid #ccc;
+    // border-radius: 10px;
     background-color: #fff;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     position: relative; 
     z-index: 10;
     object-fit: contain;
+    display: block;
 }
 
 .canvas.responsive {
@@ -229,25 +213,10 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     // justify-content: center;
     // align-items: center;
     width: 100%;
-    height: 100%;
+    height: fit-content;
     // max-width: 100%;
     // max-height: 100%;
     overflow: auto;
-}
-
-.marker {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    background-color: red;
-    border-radius: 50%;
-    cursor: move;
-    z-index: 22; 
-    pointer-events: auto;
-}
-
-.marker, .text-frame {
-    transition: none !important;
 }
 
 .cropper-container {
@@ -259,7 +228,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     z-index: 15;
-    max-width: fit-content;
+    max-width: 100%;
     max-height: 100%;
     overflow: auto;
 
@@ -283,68 +252,110 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
 }
 
 .text-frame-container {
-    position: absolute;
-    top: 0;
-    left: 0;
+    // position: absolute;
+    // top: 0;
+    // left: 0;
     width: 100%;
     height: 100%;
-    z-index: 20;
+    z-index: 15;
     pointer-events: none;
 }
 
 .text-frame {
     position: absolute;
-    border: 2px dashed #00f;
+    border: 2px dashed #2196f3;
     background: rgba(255, 255, 255, 0.3);
     pointer-events: auto;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 21;
-    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 
-    &.show {
-        opacity: 1;
+    .text-input {
+        width: 100%;
+        height: 100%;
+        padding: 5px;
+        outline: none;
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+        background: transparent;
+        cursor: text;
+
+        &:focus {
+            background: rgba(255, 255, 255, 0.5);
+        }
     }
 }
 
-.text-modal {
-    position: absolute;
-    top: 100%; 
-    left: 0; 
-    margin-top: 10px;
+.text-options-dialog {
+    position: relative;
+    width: fit-content;
+    height: fit-content;
     background: #fff;
-    padding: 20px;
-    border: 1px solid #ccc;
-    border-radius: 15px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-    z-index: 19;
-    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
     pointer-events: auto;
 
     h4 {
-        margin: 0 0 15px;
-        font-size: 16px;
-        color: #333;
+        margin-top: 0;
+        font-size: 1.2em;
+        margin-bottom: 24px;
+        align-self: center;
     }
 
-    &.show {
-        opacity: 1;
-    }
-}
+    .text-item {
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+        justify-content: space-between;
 
-.text-frame-input {
-    width: 100%;
-    height: 100%;
-    border: none;
-    padding: 5px;
-    font-size: 16px;
-    resize: none;
-    background: transparent;
-    outline: none;
-    box-sizing: border-box;
-    line-height: 1.2;
-    white-space: pre-wrap;
-    word-wrap: break-word;
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        select {
+            border: 1px solid #333;
+        }
+
+        select, input[type="range"] {
+            width: fit-content;
+            padding: 5px;
+        }
+
+        input[type="color"] {
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            border: none;
+        }
+    }
+
+    .modal-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+
+        .action-btn {
+            padding: 5px 15px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+
+            &.apply-btn {
+                background-color: #4CAF50;
+                color: white;
+            }
+
+            &.cancel-btn {
+                background-color: #f44336;
+                color: white;
+            }
+        }
+    }
 }
 
 .rotate-modal {
@@ -412,7 +423,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 }
 
-.adjust-item, .save-item, .brush-item, .text-item {
+.adjust-item, .save-item, .brush-item{
     // margin-bottom: 15px;
     margin-top: 5px;
 
@@ -575,6 +586,21 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 }
 
+.save-button {
+    background: linear-gradient(90deg, #4681b8, #355f87);
+    color: white;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: transform 0.2s ease, background-color 0.3s ease;
+    
+    &:hover {
+        background: linear-gradient(90deg, #34516c, #29435b);
+    }
+}
+
 .toast-notification {
     position: fixed;
     top: 20px;
@@ -729,15 +755,15 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         justify-content: center;
     }
 
-    .text-frame-input{
+    .text-frame-container{
         width: fit-content;
     }
 
     .text-frame {
-        touch-action: none; 
+        width: fit-content;
     }
 
-    .text-modal {
+    .text-options-dialog {
         width: fit-content;
         padding: 10px;
         transform: translateX(0);
@@ -810,8 +836,8 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
     }
 
     .canvas-container {
-        width: 100%;
-        height: 100%;
+        width: fit-content;
+        height: fit-content;
         overflow: auto;
     }
 
@@ -838,9 +864,15 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         }
     }
 
-    
+    .text-frame {
+        width: fit-content;
+    }
 
-    .text-modal, .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
+    .text-options-dialog {
+        width: min(90%, 400px);
+    }
+
+    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
         width: min(90%, 400px);
     }
 

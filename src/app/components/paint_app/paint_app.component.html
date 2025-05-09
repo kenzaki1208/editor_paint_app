@@ -70,7 +70,7 @@
                 <span class="btn-label">Clear</span>
             </button>
 
-            <button class="toolbar-btn" (click)="openTextModal()" title="Văn bản" [ngClass]="{'active': isTextMode}" [disabled]="!hasImage">
+            <button class="toolbar-btn" (click)="openTextModal()" title="Văn bản" [ngClass]="{'active': textToolState !== 'inactive'}" [disabled]="!hasImage">
                 <span class="material-icons">text_fields</span>
                 <span class="btn-label">Text</span>
             </button>
@@ -93,7 +93,12 @@
             </div>
             
             <div class="canvas-container" style="position: relative;">
-                <canvas #canvas (mousedown)="startDrawing($event)" (mousemove)="draw($event)" (mouseup)="stopDrawing($event)"></canvas>
+                <canvas #canvas 
+                    (mousedown)="startDrawing($event)" 
+                    (mousemove)="draw($event)" 
+                    (mouseup)="stopDrawing($event)"
+                    (click)="onCanvasClick($event)"
+                ></canvas>
 
                 <div *ngIf="showCropper" class="cropper-container">
                     <div class="cropper-options">
@@ -144,38 +149,8 @@
                     </div>
                 </div>
 
-                <div *ngIf="showMarker" class="marker" [style.left.px]="markerPosition.x" [style.top.px]="markerPosition.y"></div>
-
-                <div *ngIf="showTextFrame" class="text-frame-container">
-                    <div class="text-frame" [style.left.px]="textFramePosition.x" [style.top.px]="textFramePosition.y" [style.width.px]="textFramePosition.width" [style.height.px]="textFramePosition.height">
-                        <textarea class="text-frame-input" [(ngModel)]="textContent" placeholder="Nhập văn bản"></textarea>
-                        <div class="text-modal">
-                            <h4>Tùy Chỉnh Văn Bản</h4>
-                            <div class="text-item">
-                                <label>Font chữ:</label>
-                                <select [(ngModel)]="textFont">
-                                    <option value="Arial">Arial</option>
-                                    <option value="Times New Roman">Times New Roman</option>
-                                    <option value="Courier New">Courier New</option>
-                                    <option value="Verdana">Verdana</option>
-                                </select>
-                            </div>
-                            <div class="text-item">
-                                <label>Kích thước: {{ textSize }}</label>
-                                <input type="range" min="10" max="100" step="1" [(ngModel)]="textSize">
-                            </div>
-                            <div class="text-item">
-                                <label>Màu chữ:</label>
-                                <input type="color" [(ngModel)]="textColor">
-                            </div>
-                            <div class="modal-actions">
-                                <button class="action-btn apply-btn" (click)="applyText()">Áp dụng</button>
-                                <button class="action-btn cancel-btn" (click)="cancelText()">Hủy</button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                </div>
+                
+            
                 <div *ngIf="showAdjustModal" class="adjust-modal" role="dialog" aria-labelledby="adjustModalTitle">
                     <h4 id="adjustModalTitle">{{ adjustModalTitle }}</h4>
                     <div class="adjust-item">
@@ -220,6 +195,7 @@
                     <div class="modal-actions">
                         <button class="action-btn apply-btn" (click)="applyBrush()">Áp dụng</button>
                         <button class="action-btn cancel-btn" (click)="cancelBrush()">Hủy</button>
+                        <button class="save-button" (click)="saveBrushDrawing()" [class.show]="drawings.length > 0">Save</button>
                     </div>
                 </div>
     
@@ -238,8 +214,51 @@
                         <button class="action-btn cancel-btn" (click)="cancelPresetFilterModal()">Hủy</button>
                     </div>
                 </div>
+                <div *ngIf="showTextFrame" class="text-frame-container">
+                    <div class="text-frame" 
+                        [style.left.px]="textFramePosition.x" 
+                        [style.top.px]="textFramePosition.y" 
+                        [style.width.px]="textFramePosition.width" 
+                        [style.height.px]="textFramePosition.height"
+                        (click)="$event.stopPropagation()"
+                    >
+                        <div class="text-input" 
+                            contenteditable="true"
+                            [style.fontFamily]="textFont"
+                            [style.fontSize.px]="textSize"
+                            [style.color]="textColor"
+                            (input)="updateTextContent($event)"
+                            (keydown.enter)="$event.preventDefault(); applyText()"
+                            #textInput>
+                        </div>
+                </div>
+    
+                <div *ngIf="showTextFrame" class="text-options-dialog">
+                    <h4 id="textModalTitle">Tùy Chỉnh Văn Bản</h4>
+                    <div class="text-item">
+                        <label>Font chữ:</label>
+                        <select [(ngModel)]="textFont" (change)="previewText()">
+                            <option value="Arial">Arial</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Verdana">Verdana</option>
+                        </select>
+                    </div>
+                    <div class="text-item">
+                        <label>Kích thước:</label>
+                        <input type="range" min="10" max="100" step="1" [(ngModel)]="textSize" (input)="previewText()">
+                    </div>
+                    <div class="text-item">
+                        <label>Màu chữ:</label>
+                        <input type="color" [(ngModel)]="textColor" (input)="previewText()">
+                    </div>
+                    <div class="modal-actions">
+                        <button class="action-btn apply-btn" (click)="applyText()">Áp dụng</button>
+                        <button class="action-btn cancel-btn" (click)="cancelText()">Hủy</button>
+                    </div>
+                </div>
             </div> 
-
+            
 
             <div class="loading-overlay" *ngIf="isLoading">
                 Đang tải ảnh...

@@ -30,6 +30,11 @@
                 <span class="btn-label">Rotate 90°</span>
             </button>
 
+            <button class="toolbar-btn" (click)="openFlipModal()" title="Lật ảnh" [disabled]="!hasImage">
+                <span class="material-icons">flip</span>
+                <span class="btn-label">Flip</span>
+            </button>
+
             <button class="toolbar-btn" (click)="openAdjustModal('brightness')" title="Độ sáng" [disabled]="!hasImage">
                 <span class="material-icons">brightness_medium</span>
                 <span class="btn-label">Brightness</span>
@@ -53,6 +58,11 @@
             <button class="toolbar-btn" (click)="openBrushModal()" title="cọ vẽ" [disabled]="!hasImage">
                 <span class="material-icons">brush</span>
                 <span class="btn-label">Brush</span>
+            </button>
+
+            <button class="toolbar-btn" (click)="toggleAddPointMode()" title="Thêm điểm ảnh" [disabled]="!hasImage">
+                <span class="material-icons">add_location</span>
+                <span class="btn-label">Thêm point</span>
             </button>
 
             <button class="toolbar-btn" (click)="resetFilters()" title="Reset Filters" [disabled]="!hasImage">
@@ -91,7 +101,38 @@
                     bottomLeftX: {{cropperPosition.x2}}, bottomRightY: {{cropperPosition.y2}}
                 </div>
             </div>
-            
+
+            <div *ngIf="showCropper" class="cropper-container">
+                <div class="cropper-options">
+                    <label>Tỷ lệ khung hình:</label>
+                    <select [(ngModel)]="selectedAspectRatio" (change)="updateAspectRatio()">
+                        <option value="free">Tự do</option>
+                        <option value="4/3">4:3</option>
+                        <option value="16/9">16:9</option>
+                    </select>
+                    <label>
+                        <input type="checkbox" [(ngModel)]="maintainAspectRatio" (change)="updateAspectRatio()">
+                        Giữ tỷ lệ
+                    </label>
+                </div>
+    
+                <image-cropper
+                    [imageChangedEvent]="imageChangedEvent"
+                    [maintainAspectRatio]="maintainAspectRatio"
+                    [aspectRatio]="aspectRatio"
+                    [resizeToWidth]="0"
+                    (imageCropped)="imageCropped($event)"
+                    (imageLoaded)="imageLoaded()"
+                    (cropperReady)="cropperReady()"
+                    (loadImageFailed)="loadImageFailed()">  
+                </image-cropper>
+    
+                <div class="cropper-actions">
+                    <button class="action-btn apply-btn" (click)="applyCrop()">Áp dụng</button>
+                    <button class="action-btn cancel-btn" (click)="cancelCrop()">Hủy</button>
+                </div>
+            </div>
+
             <div class="canvas-container" style="position: relative;">
                 <canvas #canvas 
                     (mousedown)="startDrawing($event)" 
@@ -100,35 +141,12 @@
                     (click)="onCanvasClick($event)"
                 ></canvas>
 
-                <div *ngIf="showCropper" class="cropper-container">
-                    <div class="cropper-options">
-                        <label>Tỷ lệ khung hình:</label>
-                        <select [(ngModel)]="selectedAspectRatio" (change)="updateAspectRatio()">
-                            <option value="free">Tự do</option>
-                            <option value="4/3">4:3</option>
-                            <option value="16/9">16:9</option>
-                        </select>
-                        <label>
-                            <input type="checkbox" [(ngModel)]="maintainAspectRatio" (change)="updateAspectRatio()">
-                            Giữ tỷ lệ
-                        </label>
-                    </div>
-        
-                    <image-cropper
-                        [imageChangedEvent]="imageChangedEvent"
-                        [maintainAspectRatio]="maintainAspectRatio"
-                        [aspectRatio]="aspectRatio"
-                        [resizeToWidth]="canvasWidth"
-                        (imageCropped)="imageCropped($event)"
-                        (imageLoaded)="imageLoaded()"
-                        (cropperReady)="cropperReady()"
-                        (loadImageFailed)="loadImageFailed()">  
-                    </image-cropper>
-        
-                    <div class="cropper-actions">
-                        <button class="action-btn apply-btn" (click)="applyCrop()">Áp dụng</button>
-                        <button class="action-btn cancel-btn" (click)="cancelCrop()">Hủy</button>
-                    </div>
+                <div *ngFor="let point of points" class="point-marker" 
+                    [style.left.px]="point.x" 
+                    [style.top.px]="point.y" 
+                    (mousedown)="startDragging($event, point)" 
+                    (touchstart)="startDragging($event, point)">
+                    <span class="material-icons">circle</span>
                 </div>
 
                 <div *ngIf="showRotateModal" class="rotate-modal">
@@ -149,7 +167,23 @@
                     </div>
                 </div>
 
-                
+                <div *ngIf="showFlipModal" class="flip-modal">
+                    <h4>Lật Ảnh</h4>
+                    <div class="flip-options">
+                        <button class="action-btn flip-btn" (click)="flipImage('horizontal')">
+                            <span class="material-icons">flip</span>
+                            Lật Ngang
+                        </button>
+                        <button class="action-btn flip-btn" (click)="flipImage('vertical')">
+                            <span class="material-icons">flip</span>
+                            Lật Dọc
+                        </button>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="action-btn apply-btn" (click)="applyFlip()">Áp dụng</button>
+                        <button class="action-btn cancel-btn" (click)="cancelFlip()">Hủy</button>
+                    </div>
+                </div>
             
                 <div *ngIf="showAdjustModal" class="adjust-modal" role="dialog" aria-labelledby="adjustModalTitle">
                     <h4 id="adjustModalTitle">{{ adjustModalTitle }}</h4>
@@ -195,7 +229,7 @@
                     <div class="modal-actions">
                         <button class="action-btn apply-btn" (click)="applyBrush()">Áp dụng</button>
                         <button class="action-btn cancel-btn" (click)="cancelBrush()">Hủy</button>
-                        <button class="save-button" (click)="saveBrushDrawing()" [class.show]="drawings.length > 0">Save</button>
+                        <button class="save-button" (click)="saveBrushDrawing()">Lưu</button>
                     </div>
                 </div>
     

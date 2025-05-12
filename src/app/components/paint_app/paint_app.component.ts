@@ -56,6 +56,12 @@ export class PaintAppComponent {
     isBrushMode: boolean = false; 
     isFilterAdjustMode: boolean = false;
 
+    showFlipModal: boolean = false;
+    private flipHorizontal: boolean = false;
+    private flipVertical: boolean = false;
+    private tempFlipHorizontal: boolean = false;
+    private tempFlipVertical: boolean = false;
+
     private isDrawing = false;
     brushSize = 5;
     brushColor = '#000000';
@@ -108,6 +114,12 @@ export class PaintAppComponent {
     private toastTimeout: any = null;
     private originalImageSrc: string | null = null;
     private originalImage: HTMLImageElement | null = null;
+
+    points: { x: number, y: number }[] = [];
+    isAddPointMode: boolean = false;
+    draggingPoint: { x: number, y: number } | null = null;
+    dragOffset: { x: number, y: number } | null = null;
+    private animationFrameId: number | null = null;
 
     constructor(private cdr: ChangeDetectorRef, private renderer: Renderer2) {}
 
@@ -309,13 +321,13 @@ export class PaintAppComponent {
         if (this.showCropper && this.canvas && this.canvas.nativeElement) {
             const cropperContainer = document.querySelector('.cropper-container') as HTMLElement;
             if (cropperContainer && this.imageWidth && this.imageHeight) {
-                cropperContainer.style.width = `${this.imageWidth}px`;
-                cropperContainer.style.height = `${this.imageHeight}px`;
+                // cropperContainer.style.width = `${this.imageWidth}px`;
+                // cropperContainer.style.height = `${this.imageHeight}px`;
     
                 const cropper = cropperContainer.querySelector('image-cropper');
                 if (cropper) {
-                    cropper.setAttribute('resizeToWidth', this.imageWidth.toString());
-                    cropper.setAttribute('resizeToHeight', this.imageHeight.toString());
+                    cropper.setAttribute('resizeToWidth', '0');
+                    cropper.setAttribute('resizeToHeight', '0');
                 }
     
                 this.cdr.detectChanges();
@@ -332,6 +344,19 @@ export class PaintAppComponent {
         this.originalImageSrc = this.image.src;
         this.showCropper = true;
         this.isLoading = true;
+
+        const mainArea = document.querySelector('.main-area') as HTMLElement;
+        const canvasContainer = document.querySelector('.canvas-container') as HTMLElement;
+        if (mainArea) {
+            mainArea.scrollTop = 0;
+            mainArea.scrollLeft = 0;
+        }
+        if (canvasContainer) {
+            canvasContainer.scrollTop = 0;
+            canvasContainer.scrollLeft = 0;
+        }
+
+        this.lockScroll();
 
         this.imageChangedEvent = {
             target: {
@@ -391,26 +416,36 @@ export class PaintAppComponent {
             this.showToastNotification('Không có dữ liệu ảnh crop. Vui lòng thử lại.', 'error');
             this.isLoading = false;
             this.showCropper = false;
+            this.unlockScroll();
             this.cdr.detectChanges();
             return;
         }
     
         this.isLoading = true;
         this.showCropper = false;
+        this.unlockScroll();
     
         const croppedImg = new Image();
         croppedImg.src = this.croppedImage;
     
         croppedImg.onload = () => {
             console.log('croppedImg loaded:', croppedImg.width, croppedImg.height);
-    
-            this.canvas.nativeElement.width = croppedImg.width;
-            this.canvas.nativeElement.height = croppedImg.height;
-            this.imageWidth = croppedImg.width;
-            this.imageHeight = croppedImg.height;
-    
+
+            const canvasContainer = this.canvas.nativeElement.parentElement!;
+            const maxWidth = canvasContainer.clientWidth;
+            const maxHeight = canvasContainer.clientHeight;
+
+            const ratio = Math.min(maxWidth / croppedImg.width, maxHeight / croppedImg.height, 1);
+            const scaledWidth = croppedImg.width * ratio;
+            const scaledHeight = croppedImg.height * ratio;
+
+            this.canvas.nativeElement.width = scaledWidth;
+            this.canvas.nativeElement.height = scaledHeight;
+            this.imageWidth = scaledWidth;
+            this.imageHeight = scaledHeight;
+
             this.ctx.clearRect(0, 0, this.canvas.nativeElement.width, this.canvas.nativeElement.height);
-            this.ctx.drawImage(croppedImg, 0, 0, croppedImg.width, croppedImg.height);
+            this.ctx.drawImage(croppedImg, 0, 0, scaledWidth, scaledHeight);
     
             this.image = croppedImg;
     
@@ -420,6 +455,7 @@ export class PaintAppComponent {
             this.hasImage = true;
     
             this.saveState();
+            this.adjustCanvasSize();
             this.showToastNotification('Đã áp dụng cắt ảnh thành công!');
             this.isLoading = false;
             this.cdr.detectChanges();
@@ -459,6 +495,7 @@ export class PaintAppComponent {
                 this.cropperPosition = null;
                 this.croppedImage = '';
                 this.originalImageSrc = null;
+                this.unlockScroll();
                 this.cdr.detectChanges();
     
                 setTimeout(() => {
@@ -476,6 +513,7 @@ export class PaintAppComponent {
             this.showCropper = false;
             this.cropperPosition = null;
             this.croppedImage = '';
+            this.unlockScroll();
             this.cdr.detectChanges();
         }
     }
@@ -500,6 +538,22 @@ export class PaintAppComponent {
 
     cropperReady() {
         this.isLoading = false;
+    }
+
+    lockScroll() {
+        const mainArea = document.querySelector('.main-area') as HTMLElement;
+        const canvasContainer = document.querySelector('.canvas-container') as HTMLElement;
+        if (mainArea) mainArea.classList.add('no-scroll');
+        if (canvasContainer) canvasContainer.classList.add('no-scroll');
+        document.body.style.overflow = 'hidden'; // Khóa cuộn trên toàn bộ body
+    }
+
+    unlockScroll() {
+        const mainArea = document.querySelector('.main-area') as HTMLElement;
+        const canvasContainer = document.querySelector('.canvas-container') as HTMLElement;
+        if (mainArea) mainArea.classList.remove('no-scroll');
+        if (canvasContainer) canvasContainer.classList.remove('no-scroll');
+        document.body.style.overflow = ''; // Mở khóa cuộn trên toàn bộ body
     }
 
     // Rotate Image
@@ -607,6 +661,51 @@ export class PaintAppComponent {
         this.cdr.detectChanges();
     }
 
+    // Flip Image
+    openFlipModal() {
+        if (!this.hasImage) {
+            this.showToastNotification('Vui lòng tải ảnh trước khi lật.');
+            return;
+        }
+        this.showFlipModal = true;
+        this.tempFlipHorizontal = this.flipHorizontal;
+        this.tempFlipVertical = this.flipVertical;
+        this.cdr.detectChanges();
+    }
+
+    flipImage(type: 'horizontal' | 'vertical') {
+        if (!this.image.src) return;
+    
+        this.isLoading = true;
+        
+        if (type === 'horizontal') {
+            this.tempFlipHorizontal = !this.tempFlipHorizontal;
+        } else {
+            this.tempFlipVertical = !this.tempFlipVertical;
+        }
+    
+        this.redrawCanvas();
+        this.isLoading = false;
+        this.cdr.detectChanges();
+    }
+
+    applyFlip() {
+        this.flipHorizontal = this.tempFlipHorizontal;
+        this.flipVertical = this.tempFlipVertical;
+        this.saveState();
+        this.showFlipModal = false;
+        this.redrawCanvas();
+        this.cdr.detectChanges();
+    }
+    
+    cancelFlip() {
+        this.tempFlipHorizontal = this.flipHorizontal;
+        this.tempFlipVertical = this.flipVertical;
+        this.showFlipModal = false;
+        this.redrawCanvas();
+        this.cdr.detectChanges();
+    }
+
     // Save Image
     openSaveModal() {
         this.showSaveModal = true;
@@ -681,9 +780,14 @@ export class PaintAppComponent {
         this.hue = 0;
         this.sharpness = 0;
         this.currentRotation = 0;
+        this.flipHorizontal = false;
+        this.flipVertical = false;
+        this.tempFlipHorizontal = false;
+        this.tempFlipVertical = false;
         this.drawings = [];
         this.brushStrokes = [];
         this.texts = [];
+        this.points = [];
         this.applyFilters();
         this.saveState();
         if (this.originalImage) {
@@ -953,6 +1057,11 @@ export class PaintAppComponent {
             this.ctx.save();
             this.ctx.translate(canvas.width / 2, canvas.height / 2);
             this.ctx.rotate(this.currentRotation);
+            
+            const scaleX = this.tempFlipHorizontal ? -1 : 1;
+            const scaleY = this.tempFlipVertical ? -1 : 1;
+            this.ctx.scale(scaleX, scaleY);
+            
             this.ctx.filter = `brightness(${this.brightness}%) contrast(${this.contrast}%) saturate(${this.saturation}%) hue-rotate(${this.hue}deg)`;
             this.ctx.drawImage(this.image, -this.image.width / 2, -this.image.height / 2, this.image.width, this.image.height);
             this.ctx.filter = 'none';
@@ -964,9 +1073,11 @@ export class PaintAppComponent {
                 this.ctx.strokeStyle = stroke.color;
     
                 stroke.points.forEach((point, index) => {
-                    // Tọa độ tương đối so với tâm ảnh
-                    const adjustedX = point.x - this.image.width / 2;
-                    const adjustedY = point.y - this.image.height / 2;
+                    let adjustedX = point.x - this.image.width / 2;
+                    let adjustedY = point.y - this.image.height / 2;
+
+                    adjustedX = adjustedX * scaleX;
+                    adjustedY = adjustedY * scaleY;
     
                     if (index === 0) {
                         this.ctx.moveTo(adjustedX, adjustedY);
@@ -980,11 +1091,22 @@ export class PaintAppComponent {
 
             this.texts.forEach(text => {
                 this.ctx.save();
-                const adjustedX = text.x - this.image.width / 2;
-                const adjustedY = text.y - this.image.height / 2;
+                let adjustedX = text.x - this.image.width / 2;
+                let adjustedY = text.y - this.image.height / 2;
                 const adjustedWidth = text.width;
                 const adjustedHeight = text.height;
                 const adjustedSize = text.size;
+
+                adjustedX = adjustedX * scaleX;
+                adjustedY = adjustedY * scaleY;
+
+                if (this.tempFlipHorizontal) {
+                    const textWidth = this.ctx.measureText(text.content).width;
+                    adjustedX -= textWidth;
+                }
+                if (this.tempFlipVertical) {
+                    adjustedY -= adjustedSize;
+                }
                 
                 this.ctx.font = `${adjustedSize}px ${text.font}`;
                 this.ctx.fillStyle = text.color;
@@ -1194,6 +1316,118 @@ export class PaintAppComponent {
         console.log('Text frame closed, new state:', this.textToolState, this.showTextFrame, this.showTextModal);
     }
 
+    //point marker
+    toggleAddPointMode() {
+        if (!this.hasImage) {
+            this.showToastNotification('Vui lòng tải ảnh trước khi thêm điểm ảnh.', 'error');
+            return;
+        }
+        this.isAddPointMode = !this.isAddPointMode;
+        console.log('Add Point Mode:', this.isAddPointMode);
+        if (this.isAddPointMode) {
+            this.canvas.nativeElement.addEventListener('click', this.handleCanvasClick.bind(this));
+        } else {
+            this.canvas.nativeElement.removeEventListener('click', this.handleCanvasClick.bind(this));
+        }
+    }
+
+    handleCanvasClick(event: MouseEvent) {
+        if (!this.isAddPointMode || !this.image.src) return;
+
+        const rect = this.canvas.nativeElement.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        const maxX = this.image.width;
+        const maxY = this.image.height;
+        const newX = Math.max(0, Math.min(x, maxX - 20)); 
+        const newY = Math.max(0, Math.min(y, maxY - 20));
+
+        this.points.push({ x: newX, y: newY });
+        this.redrawCanvas(); 
+        console.log('Added point at:', { x: newX, y: newY });
+    }
+
+    startDragging(event: MouseEvent | TouchEvent, point: { x: number, y: number }) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.draggingPoint = point;
+
+        const rect = this.canvas.nativeElement.getBoundingClientRect();
+        if (event instanceof MouseEvent) {
+            this.dragOffset = {
+                x: event.clientX - rect.left - point.x,
+                y: event.clientY - rect.top - point.y
+            };
+            window.addEventListener('mousemove', this.handleDragging.bind(this));
+            window.addEventListener('mouseup', this.stopDragging.bind(this), { once: true });
+        } else if (event instanceof TouchEvent) {
+            this.dragOffset = {
+                x: event.touches[0].clientX - rect.left - point.x,
+                y: event.touches[0].clientY - rect.top - point.y
+            };
+            window.addEventListener('touchmove', this.handleDragging.bind(this));
+            window.addEventListener('touchend', this.stopDragging.bind(this), { once: true });
+        }
+    }
+
+    handleDragging(event: MouseEvent | TouchEvent) {
+        if (!this.draggingPoint || !this.dragOffset || !this.image.src) return;
+
+        event.preventDefault();
+        const rect = this.canvas.nativeElement.getBoundingClientRect();
+        let newX, newY;
+
+        if (event instanceof MouseEvent) {
+            newX = event.clientX - rect.left - this.dragOffset.x;
+            newY = event.clientY - rect.top - this.dragOffset.y;
+        } else if (event instanceof TouchEvent) {
+            newX = event.touches[0].clientX - rect.left - this.dragOffset.x;
+            newY = event.touches[0].clientY - rect.top - this.dragOffset.y;
+        }
+
+        const maxX = this.image.width - 20; 
+        const maxY = this.image.height - 20;
+        newX = Math.max(0, Math.min(newX!, maxX));
+        newY = Math.max(0, Math.min(newY!, maxY));
+
+        this.draggingPoint.x = newX;
+        this.draggingPoint.y = newY;
+        if (!this.animationFrameId) {
+            this.animationFrameId = requestAnimationFrame(() => {
+                this.redrawCanvas();
+                this.animationFrameId = null;
+            });
+        } 
+    }
+
+    stopDragging(event?: MouseEvent | TouchEvent) {
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation(); 
+        }
+
+        console.log('Stopping drag:', this.draggingPoint);
+
+        this.draggingPoint = null;
+        this.dragOffset = null;
+
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+
+        window.removeEventListener('mousemove', this.handleDragging.bind(this));
+        window.removeEventListener('touchmove', this.handleDragging.bind(this));
+        window.removeEventListener('mouseup', this.stopDragging.bind(this));
+        window.removeEventListener('touchend', this.stopDragging.bind(this));
+        window.removeEventListener('mouseleave', this.stopDragging.bind(this));
+        window.removeEventListener('touchcancel', this.stopDragging.bind(this));
+
+        this.redrawCanvas(); 
+        this.cdr.detectChanges();
+    }
+
     //showToastNotification
     showToastNotification(message: string, type: string = 'success', duration: number = 3000) {
         this.toastMessage = message;
@@ -1247,6 +1481,7 @@ export class PaintAppComponent {
         this.historyIndex = -1;
 
         this.texts = [];
+        this.points = [];
 
         if (this.fileInput) {
             this.fileInput.nativeElement.value = ''; 

@@ -181,6 +181,7 @@ export class PaintAppComponent {
             this.ctx.drawImage(this.image, 0, 0, this.imageWidth * ratio, this.imageHeight * ratio);
 
             this.redrawCanvas();
+            this.adjustCropperContainerSize();
         } else {
             canvas.width = maxWidth;
             canvas.height = maxHeight;

@@ -345,6 +345,8 @@ export class PaintAppComponent {
         this.showCropper = true;
         this.isLoading = true;
 
+        this.updateAspectRatio();
+
         const mainArea = document.querySelector('.main-area') as HTMLElement;
         const canvasContainer = document.querySelector('.canvas-container') as HTMLElement;
         if (mainArea) {
@@ -522,7 +524,7 @@ export class PaintAppComponent {
         if (this.selectedAspectRatio === 'free') {
             this.maintainAspectRatio = false;
         } else {
-            this.maintainAspectRatio = false;
+            this.maintainAspectRatio = true;
             switch (this.selectedAspectRatio) {
                 case '4/3':
                     this.aspectRatio = 4 / 3;
@@ -534,6 +536,7 @@ export class PaintAppComponent {
                     this.aspectRatio = 4 / 3;
             }
         }
+        this.cdr.detectChanges();
     }
 
     cropperReady() {

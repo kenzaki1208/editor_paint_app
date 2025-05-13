@@ -318,21 +318,21 @@ export class PaintAppComponent {
 
     // Crop Image
     adjustCropperContainerSize() {
-        if (this.showCropper && this.canvas && this.canvas.nativeElement) {
-            const cropperContainer = document.querySelector('.cropper-container') as HTMLElement;
-            if (cropperContainer && this.imageWidth && this.imageHeight) {
-                // cropperContainer.style.width = `${this.imageWidth}px`;
-                // cropperContainer.style.height = `${this.imageHeight}px`;
-    
-                const cropper = cropperContainer.querySelector('image-cropper');
-                if (cropper) {
-                    cropper.setAttribute('resizeToWidth', '0');
-                    cropper.setAttribute('resizeToHeight', '0');
-                }
-    
-                this.cdr.detectChanges();
-            }
+    if (this.showCropper && this.canvas && this.canvas.nativeElement) {
+        const cropperContainer = document.querySelector('.cropper-container') as HTMLElement;
+        if (cropperContainer) {
+        const canvas = this.canvas.nativeElement;
+        cropperContainer.style.width = `${canvas.width}px`;
+
+        const cropper = cropperContainer.querySelector('image-cropper');
+        if (cropper) {
+            cropper.setAttribute('resizeToWidth', `${canvas.width}`);
+            cropper.setAttribute('resizeToHeight', `0`); 
         }
+
+        this.cdr.detectChanges();
+        }
+    }
     }
 
     cropImage() {

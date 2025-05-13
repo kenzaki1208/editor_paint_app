@@ -1159,7 +1159,10 @@ export class PaintAppComponent {
                 y: centerY + (dx * sinA + dy * cosA)
             };
         }
-        return { x: Math.max(0, Math.min(x, this.imageWidth!)), y: Math.max(0, Math.min(y, this.imageHeight!)) };
+        return { 
+            x: Math.max(0, Math.min(x, this.imageWidth!)), 
+            y: Math.max(0, Math.min(y, this.imageHeight!)) 
+        };
     }
 
     public previewText() {

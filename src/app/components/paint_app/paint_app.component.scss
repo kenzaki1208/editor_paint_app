@@ -829,7 +829,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         top: 100px;
     }
 
-    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
+    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal, .flip-modal {
         width: 100%;
         padding: 10px;
         transform: translateX(0);
@@ -921,7 +921,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar {
         width: 100%;
     }
 
-    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal {
+    .rotate-modal, .adjust-modal, .save-modal, .brush-modal, .preset-filter-modal, .flip-modal {
         width: min(90%, 400px);
     }
 

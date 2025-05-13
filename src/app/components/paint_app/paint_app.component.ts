@@ -363,7 +363,7 @@ export class PaintAppComponent {
         this.imageChangedEvent = {
             target: {
                 files: [
-                    new File([this.dataURLtoBlob(this.image.src)], 'image.jpg', { type: 'image/jpeg' })
+                    new File([this.dataURLtoBlob(this.image.src)], 'image.jpg', { type: 'image/jpg' })
                 ]
             }
         };
